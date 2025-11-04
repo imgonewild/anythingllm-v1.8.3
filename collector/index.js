@@ -177,6 +177,7 @@ app
   .listen(8888, async () => {
     await wipeCollectorStorage();
     console.log(`Document processor app listening on port 8888`);
+    console.log(`COLLECTOR_MULTIMODAL_ENABLED`, process.env.COLLECTOR_MULTIMODAL_ENABLED);
   })
   .on("error", function (_) {
     process.once("SIGUSR2", function () {

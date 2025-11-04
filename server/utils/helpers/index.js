@@ -226,49 +226,54 @@ function getLLMProvider({ provider = null, model = null } = {}) {
 function getEmbeddingEngineSelection() {
   const { NativeEmbedder } = require("../EmbeddingEngines/native");
   const engineSelection = process.env.EMBEDDING_ENGINE;
-  switch (engineSelection) {
-    case "openai":
-      const { OpenAiEmbedder } = require("../EmbeddingEngines/openAi");
-      return new OpenAiEmbedder();
-    case "azure":
-      const {
-        AzureOpenAiEmbedder,
-      } = require("../EmbeddingEngines/azureOpenAi");
-      return new AzureOpenAiEmbedder();
-    case "localai":
-      const { LocalAiEmbedder } = require("../EmbeddingEngines/localAi");
-      return new LocalAiEmbedder();
-    case "ollama":
-      const { OllamaEmbedder } = require("../EmbeddingEngines/ollama");
-      return new OllamaEmbedder();
-    case "native":
-      return new NativeEmbedder();
-    case "lmstudio":
-      const { LMStudioEmbedder } = require("../EmbeddingEngines/lmstudio");
-      return new LMStudioEmbedder();
-    case "cohere":
-      const { CohereEmbedder } = require("../EmbeddingEngines/cohere");
-      return new CohereEmbedder();
-    case "voyageai":
-      const { VoyageAiEmbedder } = require("../EmbeddingEngines/voyageAi");
-      return new VoyageAiEmbedder();
-    case "litellm":
-      const { LiteLLMEmbedder } = require("../EmbeddingEngines/liteLLM");
-      return new LiteLLMEmbedder();
-    case "mistral":
-      const { MistralEmbedder } = require("../EmbeddingEngines/mistral");
-      return new MistralEmbedder();
-    case "generic-openai":
-      const {
-        GenericOpenAiEmbedder,
-      } = require("../EmbeddingEngines/genericOpenAi");
-      return new GenericOpenAiEmbedder();
-    case "gemini":
-      const { GeminiEmbedder } = require("../EmbeddingEngines/gemini");
-      return new GeminiEmbedder();
-    default:
-      return new NativeEmbedder();
+  if (engineSelection === "multimodal") {
+    const { MultimodalEmbedder } = require("../EmbeddingEngines/multimodal");
+    return new MultimodalEmbedder();
   }
+
+  // switch (engineSelection) {
+  //   case "openai":
+  //     const { OpenAiEmbedder } = require("../EmbeddingEngines/openAi");
+  //     return new OpenAiEmbedder();
+  //   case "azure":
+  //     const {
+  //       AzureOpenAiEmbedder,
+  //     } = require("../EmbeddingEngines/azureOpenAi");
+  //     return new AzureOpenAiEmbedder();
+  //   case "localai":
+  //     const { LocalAiEmbedder } = require("../EmbeddingEngines/localAi");
+  //     return new LocalAiEmbedder();
+  //   case "ollama":
+  //     const { OllamaEmbedder } = require("../EmbeddingEngines/ollama");
+  //     return new OllamaEmbedder();
+  //   case "native":
+  //     return new NativeEmbedder();
+  //   case "lmstudio":
+  //     const { LMStudioEmbedder } = require("../EmbeddingEngines/lmstudio");
+  //     return new LMStudioEmbedder();
+  //   case "cohere":
+  //     const { CohereEmbedder } = require("../EmbeddingEngines/cohere");
+  //     return new CohereEmbedder();
+  //   case "voyageai":
+  //     const { VoyageAiEmbedder } = require("../EmbeddingEngines/voyageAi");
+  //     return new VoyageAiEmbedder();
+  //   case "litellm":
+  //     const { LiteLLMEmbedder } = require("../EmbeddingEngines/liteLLM");
+  //     return new LiteLLMEmbedder();
+  //   case "mistral":
+  //     const { MistralEmbedder } = require("../EmbeddingEngines/mistral");
+  //     return new MistralEmbedder();
+  //   case "generic-openai":
+  //     const {
+  //       GenericOpenAiEmbedder,
+  //     } = require("../EmbeddingEngines/genericOpenAi");
+  //     return new GenericOpenAiEmbedder();
+  //   case "gemini":
+  //     const { GeminiEmbedder } = require("../EmbeddingEngines/gemini");
+  //     return new GeminiEmbedder();
+  //   default:
+  //     return new NativeEmbedder();
+  // }
 }
 
 /**

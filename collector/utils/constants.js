@@ -40,7 +40,9 @@ const SUPPORTED_FILETYPE_CONVERTERS = {
   ".rst": "./convert/asTxt.js",
 
   ".html": "./convert/asTxt.js",
-  ".pdf": "./convert/asPDF/index.js",
+  ".pdf": process.env.COLLECTOR_MULTIMODAL_ENABLED === "true"
+    ? "./convert/asPDF/multimodal.js"   // NEW
+    : "./convert/asPDF/index.js",       // FALLBACK
 
   ".docx": "./convert/asDocx.js",
   ".pptx": "./convert/asOfficeMime.js",

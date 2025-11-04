@@ -24,11 +24,13 @@ class MultimodalEmbedder {
 
     this.basePath = process.env.EMBEDDING_BASE_PATH;
     this.textModel = process.env.EMBEDDING_MODEL_PREF;
-    this.imageModel = process.env.MULTIMODAL_IMAGE_MODEL || "clip-vit-base-patch32";
+    this.imageModel =
+      process.env.MULTIMODAL_IMAGE_MODEL || "clip-vit-base-patch32";
 
     // Storage paths
-    this.storagePath = process.env.MULTIMODAL_STORAGE_PATH ||
-                      path.join(process.env.STORAGE_DIR || "./storage", "multimodal");
+    this.storagePath =
+      process.env.MULTIMODAL_STORAGE_PATH ||
+      path.join(process.env.STORAGE_DIR || "./storage", "multimodal");
 
     // Initialize components
     this.maxConcurrentChunks = 1;
@@ -84,10 +86,14 @@ class MultimodalEmbedder {
    */
   async embedChunks(textChunks = []) {
     if (!(await this.#isAlive())) {
-      throw new Error(`Ollama service could not be reached. Is Ollama running?`);
+      throw new Error(
+        `Ollama service could not be reached. Is Ollama running?`
+      );
     }
 
-    this.log(`Embedding ${textChunks.length} text chunks with ${this.textModel}`);
+    this.log(
+      `Embedding ${textChunks.length} text chunks with ${this.textModel}`
+    );
 
     const data = [];
     let error = null;
@@ -114,8 +120,10 @@ class MultimodalEmbedder {
         }
 
         // Normalize embedding
-        const norm = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
-        const normalizedEmbedding = embedding.map(val => val / norm);
+        const norm = Math.sqrt(
+          embedding.reduce((sum, val) => sum + val * val, 0)
+        );
+        const normalizedEmbedding = embedding.map((val) => val / norm);
 
         data.push(normalizedEmbedding);
       } catch (err) {
@@ -140,18 +148,18 @@ class MultimodalEmbedder {
 
     try {
       // Extract text chunks and images
-      const { textChunks, images } = await this.documentProcessor.processDocument(
-        filePath,
-        options
-      );
+      const { textChunks, images } =
+        await this.documentProcessor.processDocument(filePath, options);
 
-      this.log(`Extracted ${textChunks.length} text chunks and ${images.length} images`);
+      this.log(
+        `Extracted ${textChunks.length} text chunks and ${images.length} images`
+      );
 
       // Embed text chunks
       const textEmbeddings = [];
       if (textChunks.length > 0) {
-        const texts = textChunks.map(chunk => chunk.text);
-        textEmbeddings.push(...await this.embedChunks(texts));
+        const texts = textChunks.map((chunk) => chunk.text);
+        textEmbeddings.push(...(await this.embedChunks(texts)));
       }
 
       // Embed images with CLIP
@@ -163,12 +171,22 @@ class MultimodalEmbedder {
         }
       }
 
-      this.log(`Generated ${textEmbeddings.length} text embeddings and ${imageEmbeddings.length} image embeddings`);
+      this.log(
+        `Generated ${textEmbeddings.length} text embeddings and ${imageEmbeddings.length} image embeddings`
+      );
 
       // Store in dual collections
       const documentName = path.basename(filePath);
-      await this.vectorStore.addTextChunks(textChunks, textEmbeddings, documentName);
-      await this.vectorStore.addImageChunks(images, imageEmbeddings, documentName);
+      await this.vectorStore.addTextChunks(
+        textChunks,
+        textEmbeddings,
+        documentName
+      );
+      await this.vectorStore.addImageChunks(
+        images,
+        imageEmbeddings,
+        documentName
+      );
 
       return {
         success: true,
@@ -210,12 +228,18 @@ class MultimodalEmbedder {
         );
       } else if (searchMode === "hybrid") {
         // Hybrid search (text + images)
-        const textResults = await this.vectorStore.searchText(textEmbedding, topK);
+        const textResults = await this.vectorStore.searchText(
+          textEmbedding,
+          topK
+        );
 
         let imageResults = [];
         if (includeImages) {
           const imageEmbedding = await this.clipEmbedder.embedText(queryText);
-          imageResults = await this.vectorStore.searchImages(imageEmbedding, topK);
+          imageResults = await this.vectorStore.searchImages(
+            imageEmbedding,
+            topK
+          );
         }
 
         return {
@@ -225,13 +249,27 @@ class MultimodalEmbedder {
         };
       } else if (searchMode === "text") {
         // Text-only search
-        const textResults = await this.vectorStore.searchText(textEmbedding, topK);
-        return { textResults, imageResults: [], totalResults: textResults.length };
+        const textResults = await this.vectorStore.searchText(
+          textEmbedding,
+          topK
+        );
+        return {
+          textResults,
+          imageResults: [],
+          totalResults: textResults.length,
+        };
       } else {
         // Image-only search
         const imageEmbedding = await this.clipEmbedder.embedText(queryText);
-        const imageResults = await this.vectorStore.searchImages(imageEmbedding, topK);
-        return { textResults: [], imageResults, totalResults: imageResults.length };
+        const imageResults = await this.vectorStore.searchImages(
+          imageEmbedding,
+          topK
+        );
+        return {
+          textResults: [],
+          imageResults,
+          totalResults: imageResults.length,
+        };
       }
     } catch (error) {
       this.log(`Query error: ${error.message}`);

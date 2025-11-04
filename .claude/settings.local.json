@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod:*)",
+      "Bash(./install-multimodal.sh)",
+      "Bash(node ./swagger/init.js:*)",
+      "Bash(find:*)",
+      "Bash(for file in models/documents.js models/workspace.js models/systemSettings.js index.js endpoints/admin.js endpoints/system.js endpoints/workspaces.js endpoints/api/workspace/index.js endpoints/api/system/index.js endpoints/api/openai/index.js)",
+      "Bash(do)",
+      "Bash(if [ -f \"$file\" ])",
+      "Bash(then)",
+      "Bash(sed:*)",
+      "Bash(echo:*)",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(for file in utils/chats/*.js utils/vectorStore/*.js utils/agents/aibitat/plugins/*.js utils/agents/aibitat/providers/*.js)",
+      "Bash(for dir in utils/EmbeddingEngines/*/)",
+      "Bash(if [ -f \"$dirindex.js\" ])",
+      "Bash(for dir in utils/vectorDbProviders/*/)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
