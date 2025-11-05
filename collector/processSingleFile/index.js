@@ -63,9 +63,12 @@ async function processSingleFile(targetFilename, options = {}) {
     }
   }
 
-  const FileTypeProcessor = require(SUPPORTED_FILETYPE_CONVERTERS[
-    processFileAs
-  ]);
+  const converterPath = SUPPORTED_FILETYPE_CONVERTERS[processFileAs];
+  console.log(`[DEBUG-PROCESSOR] File: ${targetFilename}`);
+  console.log(`[DEBUG-PROCESSOR] Extension: ${processFileAs}`);
+  console.log(`[DEBUG-PROCESSOR] Converter path: ${converterPath}`);
+
+  const FileTypeProcessor = require(converterPath);
   return await FileTypeProcessor({
     fullFilePath,
     filename: targetFilename,

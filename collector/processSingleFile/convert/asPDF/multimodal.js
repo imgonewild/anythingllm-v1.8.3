@@ -10,7 +10,7 @@ const PDFLoader = require("./PDFLoader");
 const OCRLoader = require("../../../utils/OCRLoader");
 const fs = require("fs");
 const path = require("path");
-const { createCanvas, loadImage } = require("canvas");
+// const { createCanvas, loadImage } = require("canvas"); // Not used, commented out to avoid native module issues
 const { createWorker } = require("tesseract.js");
 
 /**
@@ -55,6 +55,9 @@ async function asPdfMultimodal({ fullFilePath = "", filename = "", options = {} 
       documents: [],
     };
   }
+
+  console.log(`[DEBUG] About to extract images for ${filename}`);
+  console.log(`[DEBUG] pageContent length: ${pageContent.length}`);
 
   // Extract images from PDF
   console.log(`-- Extracting images from ${filename} --`);

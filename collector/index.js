@@ -1,12 +1,15 @@
+// Load path module first
+const path = require("path");
+
+// Then configure dotenv with explicit path
 process.env.NODE_ENV === "development"
-  ? require("dotenv").config({ path: `.env.${process.env.NODE_ENV}` })
-  : require("dotenv").config();
+  ? require("dotenv").config({ path: path.join(__dirname, `.env.${process.env.NODE_ENV}`) })
+  : require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 require("./utils/logger")();
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
-const path = require("path");
 const { ACCEPTED_MIMES } = require("./utils/constants");
 const { reqBody } = require("./utils/http");
 const { processSingleFile } = require("./processSingleFile");
@@ -19,6 +22,13 @@ const app = express();
 const FILE_LIMIT = "3GB";
 
 app.use(cors({ origin: true }));
+
+// Debug middleware to log all requests
+app.use((req, res, next) => {
+  console.log('[DEBUG-REQUEST]', req.method, req.path);
+  next();
+});
+
 app.use(
   bodyParser.text({ limit: FILE_LIMIT }),
   bodyParser.json({ limit: FILE_LIMIT }),
@@ -33,10 +43,15 @@ app.post(
   [verifyPayloadIntegrity],
   async function (request, response) {
     const { filename, options = {} } = reqBody(request);
+    console.log('[DEBUG-ENDPOINT] /process called with filename:', filename);
+    console.log('[DEBUG-ENDPOINT] options:', JSON.stringify(options));
+
     try {
       const targetFilename = path
         .normalize(filename)
         .replace(/^(\.\.(\/|\\|$))+/, "");
+      console.log('[DEBUG-ENDPOINT] Normalized filename:', targetFilename);
+
       const {
         success,
         reason,

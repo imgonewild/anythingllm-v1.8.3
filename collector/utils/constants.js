@@ -1,5 +1,10 @@
 const WATCH_DIRECTORY = require("path").resolve(__dirname, "../hotdir");
 
+// Debug logging for environment variable
+console.log('[DEBUG-CONSTANTS] COLLECTOR_MULTIMODAL_ENABLED:', process.env.COLLECTOR_MULTIMODAL_ENABLED);
+console.log('[DEBUG-CONSTANTS] Type:', typeof process.env.COLLECTOR_MULTIMODAL_ENABLED);
+console.log('[DEBUG-CONSTANTS] Comparison result (=== "true"):', process.env.COLLECTOR_MULTIMODAL_ENABLED === "true");
+
 const ACCEPTED_MIMES = {
   "text/plain": [".txt", ".md", ".org", ".adoc", ".rst"],
   "text/html": [".html"],
@@ -43,6 +48,10 @@ const SUPPORTED_FILETYPE_CONVERTERS = {
   ".pdf": process.env.COLLECTOR_MULTIMODAL_ENABLED === "true"
     ? "./convert/asPDF/multimodal.js"   // NEW
     : "./convert/asPDF/index.js",       // FALLBACK
+  //".pdf":  "./convert/asPDF/multimodal.js",   // NEW
+  // ".pdf": ["true", "1", "yes"].includes(String(process.env.COLLECTOR_MULTIMODAL_ENABLED).toLowerCase().replace(/['"]/g, ""))
+  //   ? "./convert/asPDF/multimodal.js"   // NEW
+  //   : "./convert/asPDF/index.js",       // FALLBACK
 
   ".docx": "./convert/asDocx.js",
   ".pptx": "./convert/asOfficeMime.js",

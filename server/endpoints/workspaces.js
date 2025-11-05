@@ -121,11 +121,16 @@ function workspaceEndpoints(app) {
     ],
     async function (request, response) {
       try {
+        console.log('[DEBUG-UPLOAD] /workspace/:slug/upload endpoint hit');
         const Collector = new CollectorApi();
         const { originalname } = request.file;
+        console.log('[DEBUG-UPLOAD] Filename:', originalname);
+
         const processingOnline = await Collector.online();
+        console.log('[DEBUG-UPLOAD] Collector online:', processingOnline);
 
         if (!processingOnline) {
+          console.log('[DEBUG-UPLOAD] Collector is offline!');
           response
             .status(500)
             .json({
@@ -136,8 +141,10 @@ function workspaceEndpoints(app) {
           return;
         }
 
+        console.log('[DEBUG-UPLOAD] Calling processDocument...');
         const { success, reason } =
           await Collector.processDocument(originalname);
+        console.log('[DEBUG-UPLOAD] processDocument result:', { success, reason });
         if (!success) {
           response.status(500).json({ success: false, error: reason }).end();
           return;
@@ -156,7 +163,7 @@ function workspaceEndpoints(app) {
         );
         response.status(200).json({ success: true, error: null });
       } catch (e) {
-        console.error(e.message, e);
+        console.error('[DEBUG-UPLOAD] Error in upload handler:', e.message, e);
         response.sendStatus(500).end();
       }
     }
