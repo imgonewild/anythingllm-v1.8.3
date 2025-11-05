@@ -243,18 +243,13 @@ async function extractWithPdfJsEnhanced(pdfPath, filename, pageContent) {
 
   try {
     const pdfBuffer = fs.readFileSync(pdfPath);
+    const pdfjs = await import("pdf-parse/lib/pdf.js/v1.10.100/build/pdf.js");
 
-    // Use pdfjs-dist for Node.js instead of bundled pdf-parse version
-    const pdfjs = require("pdfjs-dist/legacy/build/pdf.js");
-
-    // Configure for Node.js environment (no DOM)
     const pdf = await pdfjs.getDocument({
       data: new Uint8Array(pdfBuffer),
       useWorkerFetch: false,
       isEvalSupported: false,
       useSystemFonts: true,
-      standardFontDataUrl: null, // Disable font loading
-      disableFontFace: true, // Don't try to load fonts
     }).promise;
 
     console.log(`Processing ${pdf.numPages} pages with enhanced pdfjs...`);
@@ -316,15 +311,7 @@ async function extractWithPdfJsEnhanced(pdfPath, filename, pageContent) {
  * Render detected images using canvas
  */
 async function renderDetectedImages(pdf, images, filename) {
-  // Check if canvas is available
-  let createCanvas;
-  try {
-    createCanvas = require("canvas").createCanvas;
-  } catch (err) {
-    console.warn(`⚠️  Canvas module not available for rendering: ${err.message}`);
-    console.log(`   Images detected but cannot be rendered. Install canvas dependencies if needed.`);
-    return;
-  }
+  const { createCanvas } = require("canvas");
 
   for (const imageData of images) {
     try {
@@ -354,29 +341,18 @@ async function renderDetectedImages(pdf, images, filename) {
  * Canvas-based page rendering (existing fallback)
  */
 async function extractWithCanvas(pdfPath, filename, pageContent) {
+  const { createCanvas } = require("canvas");
   const images = [];
 
   try {
-    // Check if canvas is available
-    let createCanvas;
-    try {
-      createCanvas = require("canvas").createCanvas;
-    } catch (err) {
-      console.warn(`⚠️  Canvas module not available: ${err.message}`);
-      console.log(`   Skipping canvas-based extraction. Install system dependencies if needed.`);
-      return [];
-    }
-
     const pdfBuffer = fs.readFileSync(pdfPath);
-    const pdfjs = require("pdfjs-dist/legacy/build/pdf.js");
+    const pdfjs = await import("pdf-parse/lib/pdf.js/v1.10.100/build/pdf.js");
 
     const pdf = await pdfjs.getDocument({
       data: new Uint8Array(pdfBuffer),
       useWorkerFetch: false,
       isEvalSupported: false,
       useSystemFonts: true,
-      standardFontDataUrl: null,
-      disableFontFace: true,
     }).promise;
 
     console.log(`Processing ${pdf.numPages} pages with canvas...`);
@@ -508,13 +484,4 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
   };
 }
 
-// Export as the standard name for compatibility
-module.exports = asPdfMultimodal;
-
-// Also support enhanced name for explicit usage
-module.exports.asPdfMultimodalEnhanced = asPdfMultimodalEnhanced;
-
-// Keep old function name for backwards compatibility
-async function asPdfMultimodal(params) {
-  return await asPdfMultimodalEnhanced(params);
-}
+module.exports = asPdfMultimodalEnhanced;

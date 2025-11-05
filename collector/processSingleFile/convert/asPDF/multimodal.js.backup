@@ -1,0 +1,360 @@
+const { v4 } = require("uuid");
+const {
+  createdDate,
+  trashFile,
+  writeToServerDocuments,
+} = require("../../../utils/files");
+const { tokenizeString } = require("../../../utils/tokenizer");
+const { default: slugify } = require("slugify");
+const PDFLoader = require("./PDFLoader");
+const OCRLoader = require("../../../utils/OCRLoader");
+const fs = require("fs");
+const path = require("path");
+// const { createCanvas, loadImage } = require("canvas"); // Not used, commented out to avoid native module issues
+const { createWorker } = require("tesseract.js");
+
+/**
+ * Enhanced PDF processor with multimodal support
+ * Extracts both text AND images from PDFs for multimodal RAG
+ */
+async function asPdfMultimodal({ fullFilePath = "", filename = "", options = {} }) {
+  const pdfLoader = new PDFLoader(fullFilePath, {
+    splitPages: true,
+  });
+
+  console.log(`-- Working ${filename} (MULTIMODAL MODE) --`);
+  const pageContent = [];
+  let docs = await pdfLoader.load();
+
+  // Extract text content
+  if (docs.length === 0) {
+    console.log(
+      `[asPDF-Multimodal] No text content found for ${filename}. Will attempt OCR parse.`
+    );
+    docs = await new OCRLoader({
+      targetLanguages: options?.ocr?.langList,
+    }).ocrPDF(fullFilePath);
+  }
+
+  for (const doc of docs) {
+    console.log(
+      `-- Parsing content from pg ${
+        doc.metadata?.loc?.pageNumber || "unknown"
+      } --`
+    );
+    if (!doc.pageContent || !doc.pageContent.length) continue;
+    pageContent.push(doc.pageContent);
+  }
+
+  if (!pageContent.length) {
+    console.error(`[asPDF-Multimodal] Resulting text content was empty for ${filename}.`);
+    trashFile(fullFilePath);
+    return {
+      success: false,
+      reason: `No text content found in ${filename}.`,
+      documents: [],
+    };
+  }
+
+  console.log(`[DEBUG] About to extract images for ${filename}`);
+  console.log(`[DEBUG] pageContent length: ${pageContent.length}`);
+
+  // Extract images from PDF
+  console.log(`-- Extracting images from ${filename} --`);
+  const images = await extractImagesFromPDF(fullFilePath, filename, options);
+  console.log(`-- Extracted ${images.length} images --`);
+
+  const content = pageContent.join("");
+  const data = {
+    id: v4(),
+    url: "file://" + fullFilePath,
+    title: filename,
+    docAuthor: docs[0]?.metadata?.pdf?.info?.Creator || "no author found",
+    description: docs[0]?.metadata?.pdf?.info?.Title || "No description found.",
+    docSource: "pdf file uploaded by the user.",
+    chunkSource: "",
+    published: createdDate(fullFilePath),
+    wordCount: content.split(" ").length,
+    pageContent: content,
+    token_count_estimate: tokenizeString(content),
+
+    // NEW: Multimodal data
+    images: images, // Array of image objects
+    isMultimodal: true,
+    imageCount: images.length,
+  };
+
+  const document = writeToServerDocuments({
+    data,
+    filename: `${slugify(filename)}-${data.id}`,
+    options: { parseOnly: options.parseOnly },
+  });
+
+  trashFile(fullFilePath);
+  console.log(
+    `[SUCCESS]: ${filename} converted & ready for multimodal embedding.\n` +
+    `Text content: ${content.length} chars, Images: ${images.length}\n`
+  );
+
+  return { success: true, reason: null, documents: [document] };
+}
+
+/**
+ * Extract images from PDF using multiple strategies
+ * Strategy 1: Try pdf2pic (requires GraphicsMagick/ImageMagick)
+ * Strategy 2: Fallback to pdfjs + canvas rendering
+ */
+async function extractImagesFromPDF(pdfPath, filename, options = {}) {
+  const images = [];
+
+  try {
+    const pdfBuffer = fs.readFileSync(pdfPath);
+
+    // First, try to get embedded images using pdf-lib
+    const embeddedImages = await extractEmbeddedImages(pdfBuffer, filename);
+
+    if (embeddedImages.length > 0) {
+      console.log(`Found ${embeddedImages.length} embedded images using pdf-lib`);
+      images.push(...embeddedImages);
+    }
+
+    // If no embedded images found, try page rendering strategies
+    if (images.length === 0) {
+      console.log(`No embedded images found. Trying page rendering strategies...`);
+
+      // Strategy 1: Try pdf2pic (requires GraphicsMagick)
+      const pdf2picImages = await extractWithPdf2Pic(pdfPath, filename);
+
+      if (pdf2picImages.length > 0) {
+        console.log(`Extracted ${pdf2picImages.length} images using pdf2pic`);
+        images.push(...pdf2picImages);
+      } else {
+        // Strategy 2: Fallback to pure JS solution with pdfjs + canvas
+        console.log(`pdf2pic failed. Using pdfjs+canvas fallback...`);
+        const canvasImages = await extractWithPdfJsCanvas(pdfPath, filename);
+        console.log(`Extracted ${canvasImages.length} images using pdfjs+canvas`);
+        images.push(...canvasImages);
+      }
+    }
+
+    return images;
+  } catch (error) {
+    console.error(`Error extracting images from PDF: ${error.message}`);
+    console.error(error.stack);
+    return [];
+  }
+}
+
+/**
+ * Extract embedded images directly from PDF using pdf-lib
+ */
+async function extractEmbeddedImages(pdfBuffer, filename) {
+  const { PDFDocument } = require("pdf-lib");
+  const images = [];
+
+  try {
+    const pdfDoc = await PDFDocument.load(pdfBuffer);
+    const pages = pdfDoc.getPages();
+
+    for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+      const page = pages[pageIndex];
+      const pageNumber = pageIndex + 1;
+
+      // Try to extract embedded images from page
+      // Note: pdf-lib has limited image extraction capabilities
+      // This works best for PDFs with directly embedded images
+      const pageDict = page.node;
+      const resources = pageDict.get("Resources");
+
+      if (resources && resources.has("XObject")) {
+        const xObjects = resources.get("XObject");
+        const xObjectKeys = xObjects.entries();
+
+        for (const [key, xObject] of xObjectKeys) {
+          const subtype = xObject.get("Subtype");
+          if (subtype && subtype.toString() === "/Image") {
+            try {
+              // Extract image data
+              const imageData = {
+                id: `${filename}_page${pageNumber}_embedded_${key}_${Date.now()}`,
+                pageNumber,
+                imageBuffer: null, // Will be populated if we can extract it
+                caption: `Embedded image from ${filename} - Page ${pageNumber}`,
+                surroundingText: "",
+                ocrText: "",
+                documentName: filename,
+              };
+
+              // Note: Actual image data extraction from pdf-lib is complex
+              // This serves as a detection mechanism
+              images.push(imageData);
+            } catch (err) {
+              console.warn(`Failed to extract embedded image: ${err.message}`);
+            }
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(`pdf-lib embedded image extraction failed: ${error.message}`);
+  }
+
+  return images;
+}
+
+/**
+ * Extract images using pdf2pic (requires GraphicsMagick/ImageMagick)
+ */
+async function extractWithPdf2Pic(pdfPath, filename) {
+  const images = [];
+
+  try {
+    const { fromPath } = require("pdf2pic");
+    const { PDFDocument } = require("pdf-lib");
+
+    // Get page count
+    const pdfBuffer = fs.readFileSync(pdfPath);
+    const pdfDoc = await PDFDocument.load(pdfBuffer);
+    const pageCount = pdfDoc.getPageCount();
+
+    console.log(`Processing ${pageCount} pages with pdf2pic...`);
+
+    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
+      const pageImages = await extractImagesFromPage(
+        pdfPath,
+        pageNumber,
+        filename
+      );
+      images.push(...pageImages);
+    }
+
+    return images;
+  } catch (error) {
+    console.warn(`pdf2pic extraction failed: ${error.message}`);
+    return [];
+  }
+}
+
+/**
+ * Pure JavaScript fallback using pdfjs + canvas
+ * Works without external dependencies (GraphicsMagick/ImageMagick)
+ */
+async function extractWithPdfJsCanvas(pdfPath, filename) {
+  const images = [];
+
+  try {
+    const { createCanvas } = require("canvas");
+    const pdfBuffer = fs.readFileSync(pdfPath);
+
+    // Use the same pdfjs that PDFLoader uses
+    const pdfjs = await import("pdf-parse/lib/pdf.js/v1.10.100/build/pdf.js");
+
+    const pdf = await pdfjs.getDocument({
+      data: new Uint8Array(pdfBuffer),
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true,
+    }).promise;
+
+    console.log(`Processing ${pdf.numPages} pages with pdfjs+canvas...`);
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+      try {
+        const page = await pdf.getPage(pageNumber);
+        const viewport = page.getViewport({ scale: 2.0 }); // 2x scale for better quality
+
+        // Create canvas
+        const canvas = createCanvas(viewport.width, viewport.height);
+        const context = canvas.getContext("2d");
+
+        // Render PDF page to canvas
+        await page.render({
+          canvasContext: context,
+          viewport: viewport,
+        }).promise;
+
+        // Convert canvas to buffer
+        const imageBuffer = canvas.toBuffer("image/png");
+
+        // Only include pages with substantial content (> 50KB)
+        // This filters out mostly blank pages
+        if (imageBuffer.length > 50000) {
+          const imageData = {
+            id: `${filename}_page${pageNumber}_canvas_${Date.now()}`,
+            pageNumber,
+            imageBuffer: imageBuffer.toString("base64"),
+            caption: `Page ${pageNumber} from ${filename}`,
+            surroundingText: "",
+            ocrText: "",
+            documentName: filename,
+            extractionMethod: "pdfjs+canvas",
+          };
+
+          images.push(imageData);
+        } else {
+          console.log(`Skipping page ${pageNumber} - appears to be blank or too small`);
+        }
+      } catch (pageError) {
+        console.warn(`Failed to render page ${pageNumber}: ${pageError.message}`);
+      }
+    }
+
+    return images;
+  } catch (error) {
+    console.error(`pdfjs+canvas extraction failed: ${error.message}`);
+    console.error(error.stack);
+    return [];
+  }
+}
+
+/**
+ * Extract images from a specific page using pdf2pic
+ */
+async function extractImagesFromPage(pdfPath, pageNumber, filename) {
+  const { fromPath } = require("pdf2pic");
+  const images = [];
+
+  try {
+    // Convert PDF page to image
+    const options = {
+      density: 100,
+      saveFilename: `${filename}_page_${pageNumber}`,
+      savePath: path.dirname(pdfPath),
+      format: "png",
+      width: 1200,
+      height: 1600,
+    };
+
+    const convert = fromPath(pdfPath, options);
+    const pageImage = await convert(pageNumber, { responseType: "buffer" });
+
+    // Only add if the page actually has content (not blank)
+    if (pageImage.buffer && pageImage.buffer.length > 10000) {
+      const imageData = {
+        id: `${filename}_page${pageNumber}_img_${Date.now()}`,
+        pageNumber,
+        imageBuffer: pageImage.buffer.toString("base64"),
+        caption: `Figure from ${filename} - Page ${pageNumber}`,
+        surroundingText: "", // Will be filled by context extraction
+        ocrText: "", // Will be performed during embedding
+        documentName: filename,
+      };
+
+      images.push(imageData);
+    }
+
+    // Clean up temporary file if created
+    try {
+      if (pageImage.path && fs.existsSync(pageImage.path)) {
+        fs.unlinkSync(pageImage.path);
+      }
+    } catch {}
+
+  } catch (error) {
+    console.error(`Error extracting image from page ${pageNumber}: ${error.message}`);
+  }
+
+  return images;
+}
+
+module.exports = asPdfMultimodal;
