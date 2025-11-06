@@ -258,7 +258,7 @@ function OllamaLLMModelSelection({
     findCustomModels();
   }, [basePath, authToken]);
 
-  if (loading || customModels.length == 0) {
+  if (loading) {
     return (
       <div className="flex flex-col w-60">
         <label className="text-white text-sm font-semibold block mb-2">
@@ -270,14 +270,56 @@ function OllamaLLMModelSelection({
           className="border-none bg-theme-settings-input-bg border-gray-500 text-white text-sm rounded-lg block w-full p-2.5"
         >
           <option disabled={true} selected={true}>
-            {!!basePath
-              ? "--loading available models--"
-              : "Enter Ollama URL first"}
+            --loading available models--
+          </option>
+        </select>
+        <p className="text-xs leading-[18px] font-base text-white text-opacity-60 mt-2">
+          Loading models from Ollama server...
+        </p>
+      </div>
+    );
+  }
+
+  if (!basePath) {
+    return (
+      <div className="flex flex-col w-60">
+        <label className="text-white text-sm font-semibold block mb-2">
+          Ollama Model
+        </label>
+        <select
+          name="OllamaLLMModelPref"
+          disabled={true}
+          className="border-none bg-theme-settings-input-bg border-gray-500 text-white text-sm rounded-lg block w-full p-2.5"
+        >
+          <option disabled={true} selected={true}>
+            Enter Ollama URL first
           </option>
         </select>
         <p className="text-xs leading-[18px] font-base text-white text-opacity-60 mt-2">
           Select the Ollama model you want to use. Models will load after
           entering a valid Ollama URL.
+        </p>
+      </div>
+    );
+  }
+
+  if (customModels.length === 0) {
+    return (
+      <div className="flex flex-col w-60">
+        <label className="text-white text-sm font-semibold block mb-2">
+          Ollama Model
+        </label>
+        <select
+          name="OllamaLLMModelPref"
+          disabled={true}
+          className="border-none bg-theme-settings-input-bg border-gray-500 text-white text-sm rounded-lg block w-full p-2.5"
+        >
+          <option disabled={true} selected={true}>
+            No models found
+          </option>
+        </select>
+        <p className="text-xs leading-[18px] font-base text-white text-opacity-60 mt-2">
+          No models available. Please check your Ollama server is running and has models installed.
         </p>
       </div>
     );
