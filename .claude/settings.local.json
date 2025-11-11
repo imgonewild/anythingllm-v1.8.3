@@ -16,7 +16,8 @@
       "Bash(for file in utils/chats/*.js utils/vectorStore/*.js utils/agents/aibitat/plugins/*.js utils/agents/aibitat/providers/*.js)",
       "Bash(for dir in utils/EmbeddingEngines/*/)",
       "Bash(if [ -f \"$dirindex.js\" ])",
-      "Bash(for dir in utils/vectorDbProviders/*/)"
+      "Bash(for dir in utils/vectorDbProviders/*/)",
+      "Bash(npm rebuild:*)"
     ],
     "deny": [],
     "ask": []

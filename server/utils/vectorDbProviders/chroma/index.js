@@ -218,10 +218,21 @@ const Chroma = {
             chunk.forEach((chunk) => {
               const id = uuidv4();
               const { id: _id, ...metadata } = chunk.metadata;
+
+              // Sanitize metadata for ChromaDB
+              const sanitized = {};
+              for (const [key, value] of Object.entries(metadata)) {
+                if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                  sanitized[key] = value;
+                } else if (value !== null && value !== undefined) {
+                  sanitized[key] = String(value);
+                }
+              }
+
               documentVectors.push({ docId, vectorId: id });
               submission.ids.push(id);
               submission.embeddings.push(chunk.values);
-              submission.metadatas.push(metadata);
+              submission.metadatas.push(sanitized);
               submission.documents.push(metadata.text);
             });
 
@@ -303,6 +314,24 @@ const Chroma = {
         console.log("Inserting vectorized chunks into Chroma collection.");
         for (const chunk of toChunks(vectors, 500)) chunks.push(chunk);
 
+        // Sanitize metadata - ChromaDB only accepts simple types
+        submission.metadatas = submission.metadatas.map(meta => {
+          const sanitized = {};
+          for (const [key, value] of Object.entries(meta)) {
+            // Only allow strings, numbers, and booleans
+            if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+              sanitized[key] = value;
+            } else if (value === null || value === undefined) {
+              // Skip null/undefined values
+              continue;
+            } else {
+              // Convert complex types to strings
+              sanitized[key] = String(value);
+            }
+          }
+          return sanitized;
+        });
+
         try {
           await collection.add(submission);
           console.log(
@@ -310,6 +339,12 @@ const Chroma = {
           );
         } catch (error) {
           console.error("Error adding to ChromaDB:", error);
+          console.error("Submission sample:", {
+            ids: submission.ids.slice(0, 2),
+            embeddings: submission.embeddings.slice(0, 1).map(e => `[${e.length} dims]`),
+            metadatas: submission.metadatas.slice(0, 2),
+            documents: submission.documents.slice(0, 2).map(d => d.substring(0, 100))
+          });
           throw new Error(`Error embedding into ChromaDB: ${error.message}`);
         }
 

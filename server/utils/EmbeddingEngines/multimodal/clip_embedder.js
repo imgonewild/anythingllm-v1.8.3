@@ -1,5 +1,74 @@
-const { pipeline } = require("@xenova/transformers");
 const sharp = require("sharp");
+
+// Polyfill for process.getBuiltinModule (Node.js 22.3.0+)
+// Required by @xenova/transformers in older Node.js versions
+if (typeof process !== "undefined" && !process.getBuiltinModule) {
+  process.getBuiltinModule = (module) => {
+    try {
+      return require(module);
+    } catch (error) {
+      return null;
+    }
+  };
+}
+
+// Explicitly load canvas to ensure DOM polyfills are available
+// This must happen before @xenova/transformers is loaded
+try {
+  const canvas = require("canvas");
+
+  // Make canvas classes available globally for transformers.js
+  if (typeof global !== "undefined") {
+    // ImageData is available from node-canvas
+    if (!global.ImageData && canvas.ImageData) {
+      global.ImageData = canvas.ImageData;
+    }
+
+    // DOMMatrix and Path2D may not be in older node-canvas versions
+    // Provide minimal polyfills if not available
+    if (!global.DOMMatrix) {
+      global.DOMMatrix = canvas.DOMMatrix || class DOMMatrix {
+        constructor() {
+          this.a = 1; this.b = 0; this.c = 0;
+          this.d = 1; this.e = 0; this.f = 0;
+        }
+      };
+    }
+
+    if (!global.Path2D) {
+      global.Path2D = canvas.Path2D || class Path2D {
+        constructor() {}
+        moveTo() {}
+        lineTo() {}
+        arc() {}
+        closePath() {}
+      };
+    }
+  }
+} catch (error) {
+  console.warn("[ClipEmbedder] Canvas module not available, some features may not work:", error.message);
+}
+
+// Set up environment for Transformers.js in Node.js
+process.env.FORCE_NODE_CANVAS = "1";
+
+// Dynamic import for ES Module
+let transformers = null;
+const loadTransformers = async () => {
+  if (!transformers) {
+    const tf = await import("@xenova/transformers");
+
+    // Configure environment for Node.js
+    if (tf.env) {
+      tf.env.useBrowserCache = false;
+      tf.env.allowLocalModels = false;
+      tf.env.allowRemoteModels = true;
+    }
+
+    transformers = tf;
+  }
+  return transformers;
+};
 
 /**
  * CLIP Image and Text Embedder using Transformers.js
@@ -30,6 +99,7 @@ class ClipEmbedder {
   async #initImageProcessor() {
     if (!this.imageProcessor) {
       this.log("Loading CLIP image processor...");
+      const { pipeline } = await loadTransformers();
       this.imageProcessor = await pipeline(
         "image-feature-extraction",
         this.modelName
@@ -44,6 +114,7 @@ class ClipEmbedder {
   async #initTextProcessor() {
     if (!this.textProcessor) {
       this.log("Loading CLIP text processor...");
+      const { pipeline } = await loadTransformers();
       this.textProcessor = await pipeline(
         "feature-extraction",
         this.modelName

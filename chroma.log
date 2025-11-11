@@ -1,0 +1,306 @@
+[33mWARNING[0m:  [11-11-2025 19:27:23] chroma_server_nofile is not supported on Windows. chroma_server_nofile will not be set.
+[32mINFO[0m:     [11-11-2025 19:27:24] Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+[36mDEBUG[0m:    [11-11-2025 19:27:24] Starting component System
+[36mDEBUG[0m:    [11-11-2025 19:27:24] Starting component OpenTelemetryClient
+[36mDEBUG[0m:    [11-11-2025 19:27:24] Starting component SqliteDB
+[36mDEBUG[0m:    [11-11-2025 19:27:25] Starting component SimpleQuotaEnforcer
+[36mDEBUG[0m:    [11-11-2025 19:27:25] Starting component Posthog
+[36mDEBUG[0m:    [11-11-2025 19:27:25] Starting component SimpleRateLimitEnforcer
+[36mDEBUG[0m:    [11-11-2025 19:27:25] Starting component LocalSegmentManager
+[36mDEBUG[0m:    [11-11-2025 19:27:25] Starting component LocalExecutor
+[36mDEBUG[0m:    [11-11-2025 19:27:25] Starting component SegmentAPI
+[32mINFO[0m:     [11-11-2025 19:27:25] Started server process [[36m19848[0m]
+[32mINFO[0m:     [11-11-2025 19:27:25] Waiting for application startup.
+[32mINFO[0m:     [11-11-2025 19:27:25] Application startup complete.
+[32mINFO[0m:     [11-11-2025 19:27:25] Uvicorn running on [1mhttp://localhost:8000[0m (Press CTRL+C to quit)
+[32mINFO[0m:     [11-11-2025 19:28:33] ::1:61088 - "GET /api/v2/tenants/default_tenant HTTP/1.1" 200
+[32mINFO[0m:     [11-11-2025 19:28:33] ::1:61088 - "GET /api/v2/tenants/default_tenant/databases/default_database HTTP/1.1" 200
+[32mINFO[0m:     [11-11-2025 19:28:33] ::1:61088 - "GET /api/v2/tenants/default_tenant/databases/default_database/collections/multimodal_text_chunks HTTP/1.1" 400
+[31mERROR[0m:    [11-11-2025 19:28:33] '_type'
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\streams\memory.py", line 98, in receive
+    return self.receive_nowait()
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\streams\memory.py", line 93, in receive_nowait
+    raise WouldBlock
+anyio.WouldBlock
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 159, in call_next
+    message = await recv_stream.receive()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\streams\memory.py", line 118, in receive
+    raise EndOfStream
+anyio.EndOfStream
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\server\fastapi\__init__.py", line 107, in catch_exceptions_middleware
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\server\fastapi\__init__.py", line 131, in check_http_version_middleware
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 758, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 778, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 299, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 79, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 74, in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 278, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 191, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\telemetry\opentelemetry\__init__.py", line 134, in async_wrapper
+    return await f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\server\fastapi\__init__.py", line 684, in create_collection
+    await to_thread.run_sync(
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\to_thread.py", line 33, in run_sync
+    return await get_asynclib().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\_backends\_asyncio.py", line 877, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\_backends\_asyncio.py", line 807, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\server\fastapi\__init__.py", line 658, in process_create_collection
+    else CollectionConfigurationInternal.from_json(create.configuration)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\api\configuration.py", line 209, in from_json
+    f"Trying to instantiate configuration of type {cls.__name__} from JSON with type {json_map['_type']}"
+                                                                                      ~~~~~~~~^^^^^^^^^
+KeyError: '_type'
+[32mINFO[0m:     [11-11-2025 19:28:34] ::1:61088 - "POST /api/v2/tenants/default_tenant/databases/default_database/collections HTTP/1.1" 500
+[32mINFO[0m:     [11-11-2025 19:29:38] ::1:61119 - "GET / HTTP/1.1" 404
+[32mINFO[0m:     [11-11-2025 19:29:39] ::1:61119 - "GET /favicon.ico HTTP/1.1" 404
+[32mINFO[0m:     [11-11-2025 19:32:40] ::1:61142 - "GET /api/v2/tenants/default_tenant/databases/default_database/ HTTP/1.1" 200
+[32mINFO[0m:     [11-11-2025 19:32:51] ::1:61142 - "GET /api/v2/tenants/default_tenant/databases/default_database/collections/multimodal_text_chunks HTTP/1.1" 400
+[32mINFO[0m:     [11-11-2025 19:34:58] ::1:61158 - "GET /api/v2/tenants/default_tenant/databases/default_database/collections HTTP/1.1" 200
+[32mINFO[0m:     [11-11-2025 19:40:19] ::1:61403 - "GET /api/v2/heartbeat HTTP/1.1" 200
+[32mINFO[0m:     [11-11-2025 19:40:19] ::1:61403 - "GET /api/v2/tenants/default_tenant HTTP/1.1" 200
+[32mINFO[0m:     [11-11-2025 19:40:19] ::1:61403 - "GET /api/v2/tenants/default_tenant/databases/default_database HTTP/1.1" 200
+[31mERROR[0m:    [11-11-2025 19:40:19] '_type'
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\streams\memory.py", line 98, in receive
+    return self.receive_nowait()
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\streams\memory.py", line 93, in receive_nowait
+    raise WouldBlock
+anyio.WouldBlock
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 159, in call_next
+    message = await recv_stream.receive()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\streams\memory.py", line 118, in receive
+    raise EndOfStream
+anyio.EndOfStream
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\server\fastapi\__init__.py", line 107, in catch_exceptions_middleware
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\server\fastapi\__init__.py", line 131, in check_http_version_middleware
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 758, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 778, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 299, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 79, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 74, in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 278, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 191, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\telemetry\opentelemetry\__init__.py", line 134, in async_wrapper
+    return await f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\server\fastapi\__init__.py", line 684, in create_collection
+    await to_thread.run_sync(
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\to_thread.py", line 33, in run_sync
+    return await get_asynclib().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\_backends\_asyncio.py", line 877, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\_backends\_asyncio.py", line 807, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\server\fastapi\__init__.py", line 658, in process_create_collection
+    else CollectionConfigurationInternal.from_json(create.configuration)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\api\configuration.py", line 209, in from_json
+    f"Trying to instantiate configuration of type {cls.__name__} from JSON with type {json_map['_type']}"
+                                                                                      ~~~~~~~~^^^^^^^^^
+KeyError: '_type'
+[32mINFO[0m:     [11-11-2025 19:40:19] ::1:61403 - "POST /api/v2/tenants/default_tenant/databases/default_database/collections HTTP/1.1" 500
+[32mINFO[0m:     [11-11-2025 19:41:02] ::1:61434 - "GET /api/v2/heartbeat HTTP/1.1" 200
+[32mINFO[0m:     [11-11-2025 19:41:02] ::1:61434 - "GET /api/v2/tenants/default_tenant HTTP/1.1" 200
+[32mINFO[0m:     [11-11-2025 19:41:02] ::1:61434 - "GET /api/v2/tenants/default_tenant/databases/default_database HTTP/1.1" 200
+[31mERROR[0m:    [11-11-2025 19:41:02] '_type'
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\streams\memory.py", line 98, in receive
+    return self.receive_nowait()
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\streams\memory.py", line 93, in receive_nowait
+    raise WouldBlock
+anyio.WouldBlock
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 159, in call_next
+    message = await recv_stream.receive()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\streams\memory.py", line 118, in receive
+    raise EndOfStream
+anyio.EndOfStream
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\server\fastapi\__init__.py", line 107, in catch_exceptions_middleware
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\server\fastapi\__init__.py", line 131, in check_http_version_middleware
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 758, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 778, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 299, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 79, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 74, in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 278, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 191, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\telemetry\opentelemetry\__init__.py", line 134, in async_wrapper
+    return await f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\server\fastapi\__init__.py", line 684, in create_collection
+    await to_thread.run_sync(
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\to_thread.py", line 33, in run_sync
+    return await get_asynclib().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\_backends\_asyncio.py", line 877, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\anyio\_backends\_asyncio.py", line 807, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\server\fastapi\__init__.py", line 658, in process_create_collection
+    else CollectionConfigurationInternal.from_json(create.configuration)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\Lib\site-packages\chromadb\api\configuration.py", line 209, in from_json
+    f"Trying to instantiate configuration of type {cls.__name__} from JSON with type {json_map['_type']}"
+                                                                                      ~~~~~~~~^^^^^^^^^
+KeyError: '_type'
+[32mINFO[0m:     [11-11-2025 19:41:02] ::1:61434 - "POST /api/v2/tenants/default_tenant/databases/default_database/collections HTTP/1.1" 500
+[32mINFO[0m:     [11-11-2025 19:42:13] Shutting down
+[32mINFO[0m:     [11-11-2025 19:42:13] Waiting for application shutdown.
+[36mDEBUG[0m:    [11-11-2025 19:42:13] Stopping component System
+[36mDEBUG[0m:    [11-11-2025 19:42:13] Stopping component SegmentAPI
+[36mDEBUG[0m:    [11-11-2025 19:42:13] Stopping component LocalExecutor
+[36mDEBUG[0m:    [11-11-2025 19:42:13] Stopping component LocalSegmentManager
+[36mDEBUG[0m:    [11-11-2025 19:42:13] Stopping component SimpleRateLimitEnforcer
+[36mDEBUG[0m:    [11-11-2025 19:42:13] Stopping component Posthog
+[36mDEBUG[0m:    [11-11-2025 19:42:13] Stopping component SimpleQuotaEnforcer
+[36mDEBUG[0m:    [11-11-2025 19:42:13] Stopping component SqliteDB
+[36mDEBUG[0m:    [11-11-2025 19:42:13] Stopping component OpenTelemetryClient
+[32mINFO[0m:     [11-11-2025 19:42:13] Application shutdown complete.
+[32mINFO[0m:     [11-11-2025 19:42:13] Finished server process [[36m19848[0m]

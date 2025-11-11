@@ -20,6 +20,8 @@ class MultimodalVectorStore {
     this.client = null;
     this.textCollection = null;
     this.imageCollection = null;
+    this.initialized = false;
+    this.initPromise = null;
 
     // External storage for image metadata and objects
     this.imageMetadataPath = path.join(storagePath, "image_metadata.json");
@@ -29,7 +31,16 @@ class MultimodalVectorStore {
     this.imageObjects = {};
 
     this.log("Initializing MultimodalVectorStore");
-    this.#init();
+  }
+
+  /**
+   * Ensure store is initialized before operations
+   */
+  async #ensureInitialized() {
+    if (this.initialized) return;
+    if (this.initPromise) return this.initPromise;
+    this.initPromise = this.#init();
+    await this.initPromise;
   }
 
   log(text, ...args) {
@@ -41,45 +52,87 @@ class MultimodalVectorStore {
    */
   async #init() {
     try {
-      // Ensure storage directory exists
+      // Ensure storage directory exists (for metadata files)
       if (!fs.existsSync(this.storagePath)) {
         fs.mkdirSync(this.storagePath, { recursive: true });
       }
 
-      // Initialize ChromaDB client
-      this.client = new ChromaClient({
-        path: this.storagePath,
-      });
+      // Initialize ChromaDB client - use same endpoint as main ChromaDB provider
+      // ChromaDB requires an HTTP endpoint, not a file path
+      const chromaEndpoint = process.env.CHROMA_ENDPOINT || "http://localhost:8000";
 
-      // Get or create collections
-      try {
-        this.textCollection = await this.client.getCollection({
-          name: "text_chunks",
-        });
-      } catch {
-        this.textCollection = await this.client.createCollection({
-          name: "text_chunks",
-          metadata: { "hnsw:space": "cosine" },
-        });
+      // Parse authentication header if provided
+      const parseAuthHeader = (headerValue) => {
+        const [type, value] = headerValue.split(" ");
+        if (type === "Authorization") return { Authorization: value };
+        return { [type]: value };
+      };
+
+      const clientConfig = {
+        path: chromaEndpoint,
+      };
+
+      // Add authentication if configured
+      if (process.env.CHROMA_API_HEADER && process.env.CHROMA_API_KEY) {
+        clientConfig.fetchOptions = {
+          headers: parseAuthHeader(
+            `${process.env.CHROMA_API_HEADER} ${process.env.CHROMA_API_KEY}`
+          ),
+        };
       }
 
-      try {
-        this.imageCollection = await this.client.getCollection({
-          name: "image_chunks",
+      this.client = new ChromaClient(clientConfig);
+
+      this.log(`Connecting to ChromaDB at ${chromaEndpoint}`);
+
+      // Get or create collections with unique names for multimodal system
+      const textCollectionName = "multimodal_text_chunks";
+      const imageCollectionName = "multimodal_image_chunks";
+
+      // List existing collections to check if they exist
+      const existingCollections = await this.client.listCollections();
+      const existingNames = existingCollections.map(c => c.name);
+
+      this.log(`Existing collections: ${existingNames.join(', ') || 'none'}`);
+
+      // Get or create text collection
+      if (existingNames.includes(textCollectionName)) {
+        this.textCollection = await this.client.getCollection({
+          name: textCollectionName,
         });
-      } catch {
-        this.imageCollection = await this.client.createCollection({
-          name: "image_chunks",
+        this.log(`Using existing collection: ${textCollectionName}`);
+      } else {
+        this.textCollection = await this.client.createCollection({
+          name: textCollectionName,
           metadata: { "hnsw:space": "cosine" },
         });
+        this.log(`Created collection: ${textCollectionName}`);
+      }
+
+      // Get or create image collection
+      if (existingNames.includes(imageCollectionName)) {
+        this.imageCollection = await this.client.getCollection({
+          name: imageCollectionName,
+        });
+        this.log(`Using existing collection: ${imageCollectionName}`);
+      } else {
+        this.imageCollection = await this.client.createCollection({
+          name: imageCollectionName,
+          metadata: { "hnsw:space": "cosine" },
+        });
+        this.log(`Created collection: ${imageCollectionName}`);
       }
 
       // Load external metadata
       this.#loadMetadata();
 
+      this.initialized = true;
       this.log("ChromaDB initialized with dual collections");
     } catch (error) {
       this.log(`Initialization error: ${error.message}`);
+      this.log(`Stack trace: ${error.stack}`);
+      this.initialized = false;
+      this.initPromise = null;
       throw error;
     }
   }
@@ -120,6 +173,7 @@ class MultimodalVectorStore {
    * Add text chunks to vector store
    */
   async addTextChunks(textChunks, embeddings, documentName) {
+    await this.#ensureInitialized();
     if (textChunks.length === 0) return;
 
     const ids = textChunks.map(chunk => chunk.id);
@@ -146,6 +200,7 @@ class MultimodalVectorStore {
    * Add image chunks to vector store
    */
   async addImageChunks(images, embeddings, documentName) {
+    await this.#ensureInitialized();
     if (images.length === 0) return;
 
     const ids = images.map(img => img.id);
@@ -191,6 +246,7 @@ class MultimodalVectorStore {
    * Search text chunks
    */
   async searchText(queryEmbedding, topK = 5, filter = {}) {
+    await this.#ensureInitialized();
     const results = await this.textCollection.query({
       queryEmbeddings: [queryEmbedding],
       nResults: topK,
@@ -204,6 +260,7 @@ class MultimodalVectorStore {
    * Search image chunks
    */
   async searchImages(queryEmbedding, topK = 5, filter = {}) {
+    await this.#ensureInitialized();
     const results = await this.imageCollection.query({
       queryEmbeddings: [queryEmbedding],
       nResults: topK,
@@ -232,6 +289,7 @@ class MultimodalVectorStore {
    * Stage 2: Context-aware image search
    */
   async enhancedQuery(queryText, textEmbedding, topK = 5) {
+    await this.#ensureInitialized();
     this.log(`Enhanced query: "${queryText}"`);
 
     // Stage 1: Text retrieval for context
@@ -317,6 +375,7 @@ class MultimodalVectorStore {
    * Delete document from both collections
    */
   async deleteDocument(documentName) {
+    await this.#ensureInitialized();
     // Delete from text collection
     const textResults = await this.textCollection.get({
       where: { documentName },
@@ -351,6 +410,7 @@ class MultimodalVectorStore {
    * Get statistics
    */
   async getStats() {
+    await this.#ensureInitialized();
     const textCount = await this.textCollection.count();
     const imageCount = await this.imageCollection.count();
 

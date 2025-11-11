@@ -5,6 +5,19 @@ networks:
     driver: bridge
 
 services:
+  chromadb:
+    container_name: chromadb
+    image: chromadb/chroma:latest
+    volumes:
+      - "../server/storage/chroma:/chroma/chroma"
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    ports:
+      - "8000:8000"
+    networks:
+      - anything-llm
+
   anything-llm:
     container_name: anythingllm
     build:
@@ -29,3 +42,5 @@ services:
       - anything-llm
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      - chromadb
