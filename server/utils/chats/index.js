@@ -89,9 +89,15 @@ async function recentChatHistory({
  * @returns {Promise<string>} - the base prompt
  */
 async function chatPrompt(workspace, user = null) {
-  const basePrompt =
+  let basePrompt =
     workspace?.openAiPrompt ??
     "Given the following conversation, relevant context, and a follow up question, reply with an answer to the current question the user is asking. Return only your response to the question given the above information following the users instructions as needed.";
+
+  // If multimodal embedder is enabled, add image reference instructions
+  if (process.env.EMBEDDING_ENGINE === 'multimodal') {
+    basePrompt += `\n\nWhen relevant images are provided in the context (marked as [Image 1], [Image 2], etc.), reference them in your response using the same notation. For example: "The network diagram shows the server layout [Image 1]" or "As illustrated in [Image 2], the connection process involves three steps."`;
+  }
+
   return await SystemPromptVariables.expandSystemPromptVariables(
     basePrompt,
     user?.id

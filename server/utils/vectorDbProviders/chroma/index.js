@@ -415,9 +415,61 @@ const Chroma = {
       },
     }));
 
+    // Check if multimodal embedder is enabled and search for images
+    let imageSources = [];
+    let imageContextTexts = [];
+    if (process.env.EMBEDDING_ENGINE === 'multimodal') {
+      try {
+        const { MultimodalVectorStore } = require("../../EmbeddingEngines/multimodal/vector_store");
+        const storagePath = require("path").join(
+          process.env.STORAGE_DIR || "./storage",
+          "multimodal"
+        );
+        const multimodalStore = new MultimodalVectorStore(storagePath);
+
+        // Search for relevant images
+        const imageResults = await multimodalStore.searchImages(queryVector, Math.ceil(topN / 2));
+
+        // Format image results as sources and create context text
+        // Use [Image 1], [Image 2] format like the RAG system
+        imageResults.forEach((result, i) => {
+          const imageNumber = i + 1;
+          const imageDescription = [
+            `[Image ${imageNumber}] From ${result.metadata?.documentName || "document"}`,
+            result.metadata?.pageNumber ? `, Page ${result.metadata.pageNumber}` : "",
+            ` (Relevance: ${result.similarityScore?.toFixed(2) || "N/A"})`,
+            result.caption ? `\nCaption: ${result.caption}` : "",
+            result.ocrText ? `\nText in image: ${result.ocrText}` : "",
+            result.surroundingText ? `\nImage Context: ${result.surroundingText}` : "",
+          ].filter(Boolean).join("");
+
+          imageContextTexts.push(imageDescription);
+
+          imageSources.push({
+            metadata: {
+              title: result.metadata?.documentName || "Image",
+              pageNumber: result.metadata?.pageNumber,
+              caption: result.caption || "",
+              ocrText: result.ocrText || "",
+              surroundingText: result.surroundingText || "",
+              imageData: result.imageData, // Base64 image data
+              imageNumber: imageNumber, // For [Image N] references
+              contentType: "image",
+              text: imageDescription,
+              score: result.similarityScore,
+            },
+          });
+        });
+
+        console.log(`[Multimodal] Found ${imageSources.length} relevant images for query`);
+      } catch (error) {
+        console.error("[Multimodal] Error searching images:", error.message);
+      }
+    }
+
     return {
-      contextTexts,
-      sources: this.curateSources(sources),
+      contextTexts: [...contextTexts, ...imageContextTexts],
+      sources: this.curateSources([...sources, ...imageSources]),
       message: false,
     };
   },

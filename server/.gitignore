@@ -20,7 +20,7 @@ logs/server.log
 *.db-journal
 storage/lancedb
 public/
-
+venv/
 # For legacy copies of repo
 documents
 vector-cache

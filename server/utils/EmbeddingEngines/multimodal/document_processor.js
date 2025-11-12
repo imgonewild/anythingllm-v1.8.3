@@ -89,15 +89,85 @@ class DocumentProcessor {
       options
     );
 
-    // Extract images from PDF
-    // Note: pdf-parse doesn't extract images, we need pdf-lib or similar
-    // For now, return empty images array - will be enhanced via collector
-    const images = [];
+    // Extract images from PDF using pdf2pic
+    const images = await this.extractImagesFromPDF(filePath, options);
 
-    // TODO: Implement image extraction from PDF
-    // This will be handled by the enhanced collector service
+    this.log(`Extracted ${images.length} images from PDF`);
 
     return { textChunks, images };
+  }
+
+  /**
+   * Extract embedded images from PDF using Python PyMuPDF bridge
+   */
+  async extractImagesFromPDF(filePath, options = {}) {
+    const images = [];
+    const documentName = path.basename(filePath);
+
+    try {
+      const { exec } = require("child_process");
+      const { promisify } = require("util");
+      const execAsync = promisify(exec);
+
+      // Path to Python extraction script
+      const extractorScript = path.join(__dirname, "extract_images.py");
+
+      // Try to use multimodal venv Python first, then RAG venv, then system python3
+      const multimodalVenvPython = path.join(__dirname, "venv/bin/python3");
+      const ragVenvPython = path.join(process.cwd(), "../RAG/venv/bin/python3");
+
+      let pythonCmd = "python3";
+      if (fs.existsSync(multimodalVenvPython)) {
+        pythonCmd = multimodalVenvPython;
+        this.log(`Using multimodal venv Python at ${multimodalVenvPython}`);
+      } else if (fs.existsSync(ragVenvPython)) {
+        pythonCmd = ragVenvPython;
+        this.log(`Using RAG venv Python at ${ragVenvPython}`);
+      }
+
+      this.log(`Extracting images from PDF using PyMuPDF...`);
+
+      // Call Python script
+      const { stdout, stderr } = await execAsync(
+        `"${pythonCmd}" "${extractorScript}" "${filePath}"`
+      );
+
+      if (stderr) {
+        this.log(`Warning from image extractor: ${stderr}`);
+      }
+
+      // Parse JSON output
+      const extractedImages = JSON.parse(stdout);
+
+      // Convert to expected format
+      for (const img of extractedImages) {
+        images.push({
+          id: `${documentName}_${img.id}`,
+          image: Buffer.from(img.image, 'base64'),
+          pageNumber: img.pageNumber,
+          documentName,
+          caption: img.caption,
+          ocrText: img.ocrText || "",
+          surroundingText: img.surroundingText || "",
+          metadata: {
+            ...img.metadata,
+            pageNumber: img.pageNumber,
+          },
+        });
+      }
+
+      this.log(`Successfully extracted ${images.length} images from PDF`);
+    } catch (error) {
+      // Check if it's a Python/PyMuPDF availability issue
+      if (error.message.includes("python3") || error.message.includes("No module named")) {
+        this.log(`PyMuPDF not available. Install with: pip3 install PyMuPDF Pillow`);
+        this.log(`Alternatively, you can use your existing RAG system's document processor`);
+      } else {
+        this.log(`Error in PDF image extraction: ${error.message}`);
+      }
+    }
+
+    return images;
   }
 
   /**

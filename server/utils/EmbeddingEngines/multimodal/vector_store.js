@@ -93,34 +93,38 @@ class MultimodalVectorStore {
       const existingCollections = await this.client.listCollections();
       const existingNames = existingCollections.map(c => c.name);
 
-      this.log(`Existing collections: ${existingNames.join(', ') || 'none'}`);
+      this.log(`Existing collections: [${existingNames.join(', ')}]`);
 
-      // Get or create text collection
-      if (existingNames.includes(textCollectionName)) {
+      // Get or create text collection - use getOrCreateCollection to avoid race conditions
+      try {
+        this.textCollection = await this.client.getOrCreateCollection({
+          name: textCollectionName,
+          metadata: { "hnsw:space": "cosine" },
+        });
+        this.log(`Ready: ${textCollectionName}`);
+      } catch (error) {
+        this.log(`Error with text collection: ${error.message}`);
+        // Try to just get it if creation failed
         this.textCollection = await this.client.getCollection({
           name: textCollectionName,
         });
-        this.log(`Using existing collection: ${textCollectionName}`);
-      } else {
-        this.textCollection = await this.client.createCollection({
-          name: textCollectionName,
-          metadata: { "hnsw:space": "cosine" },
-        });
-        this.log(`Created collection: ${textCollectionName}`);
+        this.log(`Retrieved existing: ${textCollectionName}`);
       }
 
       // Get or create image collection
-      if (existingNames.includes(imageCollectionName)) {
-        this.imageCollection = await this.client.getCollection({
-          name: imageCollectionName,
-        });
-        this.log(`Using existing collection: ${imageCollectionName}`);
-      } else {
-        this.imageCollection = await this.client.createCollection({
+      try {
+        this.imageCollection = await this.client.getOrCreateCollection({
           name: imageCollectionName,
           metadata: { "hnsw:space": "cosine" },
         });
-        this.log(`Created collection: ${imageCollectionName}`);
+        this.log(`Ready: ${imageCollectionName}`);
+      } catch (error) {
+        this.log(`Error with image collection: ${error.message}`);
+        // Try to just get it if creation failed
+        this.imageCollection = await this.client.getCollection({
+          name: imageCollectionName,
+        });
+        this.log(`Retrieved existing: ${imageCollectionName}`);
       }
 
       // Load external metadata

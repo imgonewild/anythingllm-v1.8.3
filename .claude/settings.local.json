@@ -17,7 +17,9 @@
       "Bash(for dir in utils/EmbeddingEngines/*/)",
       "Bash(if [ -f \"$dirindex.js\" ])",
       "Bash(for dir in utils/vectorDbProviders/*/)",
-      "Bash(npm rebuild:*)"
+      "Bash(npm rebuild:*)",
+      "Bash(/mnt/c/Git-Projects/anything-llm-v1.8.3/anything-llm/RAG/venv/bin/python3:*)",
+      "Bash(./install-user.sh:*)"
     ],
     "deny": [],
     "ask": []
