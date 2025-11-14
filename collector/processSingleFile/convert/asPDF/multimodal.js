@@ -10,31 +10,27 @@ const PDFLoader = require("./PDFLoader");
 const OCRLoader = require("../../../utils/OCRLoader");
 const fs = require("fs");
 const path = require("path");
+const { PDFDocument } = require("pdf-lib");
+const sharp = require("sharp");
 
 /**
- * Enhanced PDF processor inspired by RAG Image_Rag/document_processor.py
- *
- * Key improvements over original multimodal.js:
- * 1. Direct embedded image extraction from PDF structure (like PyMuPDF)
- * 2. Precise bounding box detection for better context
- * 3. Inline vs block image detection
- * 4. Enhanced context extraction with surrounding text
- * 5. Section-aware processing
+ * PDF processor with pdf-lib image extraction
+ * Extracts images using pdf-lib and saves them to disk
  */
 
-async function asPdfMultimodalEnhanced({ fullFilePath = "", filename = "", options = {} }) {
+async function asPdfMultimodal({ fullFilePath = "", filename = "", options = {} }) {
   const pdfLoader = new PDFLoader(fullFilePath, {
     splitPages: true,
   });
 
-  console.log(`-- Working ${filename} (ENHANCED MULTIMODAL MODE) --`);
+  console.log(`-- Working ${filename} (MULTIMODAL MODE - pdf-lib) --`);
   const pageContent = [];
   let docs = await pdfLoader.load();
 
   // Extract text content
   if (docs.length === 0) {
     console.log(
-      `[asPDF-Multimodal-Enhanced] No text content found for ${filename}. Will attempt OCR parse.`
+      `[asPDF-Multimodal] No text content found for ${filename}. Will attempt OCR parse.`
     );
     docs = await new OCRLoader({
       targetLanguages: options?.ocr?.langList,
@@ -52,7 +48,7 @@ async function asPdfMultimodalEnhanced({ fullFilePath = "", filename = "", optio
   }
 
   if (!pageContent.length) {
-    console.error(`[asPDF-Multimodal-Enhanced] Resulting text content was empty for ${filename}.`);
+    console.error(`[asPDF-Multimodal] Resulting text content was empty for ${filename}.`);
     trashFile(fullFilePath);
     return {
       success: false,
@@ -64,9 +60,9 @@ async function asPdfMultimodalEnhanced({ fullFilePath = "", filename = "", optio
   console.log(`[DEBUG] About to extract images for ${filename}`);
   console.log(`[DEBUG] pageContent length: ${pageContent.length}`);
 
-  // Extract images using enhanced multi-strategy approach
-  console.log(`-- Extracting images from ${filename} (Enhanced Strategy) --`);
-  const images = await extractImagesEnhanced(fullFilePath, filename, pageContent, options);
+  // Extract images using pdf-lib only
+  console.log(`-- Extracting images from ${filename} (pdf-lib) --`);
+  const images = await extractImagesWithPdfLib(fullFilePath, filename, pageContent);
   console.log(`-- Extracted ${images.length} images --`);
 
   const content = pageContent.join("");
@@ -83,7 +79,7 @@ async function asPdfMultimodalEnhanced({ fullFilePath = "", filename = "", optio
     pageContent: content,
     token_count_estimate: tokenizeString(content),
 
-    // Enhanced multimodal data
+    // Multimodal data - no imageBuffer stored
     images: images,
     isMultimodal: true,
     imageCount: images.length,
@@ -97,7 +93,7 @@ async function asPdfMultimodalEnhanced({ fullFilePath = "", filename = "", optio
 
   trashFile(fullFilePath);
   console.log(
-    `[SUCCESS]: ${filename} converted & ready for enhanced multimodal embedding.\n` +
+    `[SUCCESS]: ${filename} converted & ready for multimodal embedding.\n` +
     `Text content: ${content.length} chars, Images: ${images.length}\n`
   );
 
@@ -105,330 +101,325 @@ async function asPdfMultimodalEnhanced({ fullFilePath = "", filename = "", optio
 }
 
 /**
- * Enhanced image extraction using multiple strategies
- * Inspired by RAG's PyMuPDF approach
+ * Determine image file extension based on PDF filter type
  */
-async function extractImagesEnhanced(pdfPath, filename, pageContent, options = {}) {
-  const images = [];
+function getImageExtension(filterStr, colorSpaceStr) {
+  // Extract filter name from PDFName string (e.g., "/DCTDecode" -> "DCTDecode")
+  const filterName = filterStr.replace(/^\//, '').split(' ')[0];
 
-  try {
-    const pdfBuffer = fs.readFileSync(pdfPath);
+  switch (filterName) {
+    case 'DCTDecode':
+      // DCT = Discrete Cosine Transform = JPEG (can save directly)
+      return 'jpg';
 
-    console.log(`🔍 Strategy 1: Attempting embedded image extraction (pdf-lib)...`);
-    const embeddedImages = await extractEmbeddedImagesEnhanced(pdfBuffer, filename, pageContent);
+    case 'JPXDecode':
+      // JPX = JPEG2000 (can save directly)
+      return 'jp2';
 
-    if (embeddedImages.length > 0) {
-      console.log(`✅ Found ${embeddedImages.length} embedded images using pdf-lib`);
-      images.push(...embeddedImages);
-      return images; // If we got embedded images, use them
-    }
+    case 'CCITTFaxDecode':
+    case 'JBIG2Decode':
+    case 'FlateDecode':
+    case 'LZWDecode':
+    case 'RunLengthDecode':
+      // These formats need decoding - save as .dat for raw data
+      // (conversion to standard formats would require complex decoding)
+      return 'dat';
 
-    console.log(`🔍 Strategy 2: Attempting pdfjs-based extraction...`);
-    const pdfjsImages = await extractWithPdfJsEnhanced(pdfPath, filename, pageContent);
+    case 'none':
+      // No compression - raw image data
+      return 'raw';
 
-    if (pdfjsImages.length > 0) {
-      console.log(`✅ Extracted ${pdfjsImages.length} images using pdfjs`);
-      images.push(...pdfjsImages);
-      return images;
-    }
-
-    console.log(`🔍 Strategy 3: Fallback to canvas rendering...`);
-    const canvasImages = await extractWithCanvas(pdfPath, filename, pageContent);
-    console.log(`✅ Extracted ${canvasImages.length} images using canvas`);
-    images.push(...canvasImages);
-
-    return images;
-  } catch (error) {
-    console.error(`Error in enhanced image extraction: ${error.message}`);
-    console.error(error.stack);
-    return [];
+    default:
+      // Unknown filter - save as .dat
+      console.warn(`   Unknown filter type: ${filterName}, saving as .dat`);
+      return 'dat';
   }
 }
 
 /**
- * Enhanced embedded image extraction with context awareness
- * Mimics PyMuPDF's fitz.Pixmap approach
+ * Check if image data can be saved directly without decoding
  */
-async function extractEmbeddedImagesEnhanced(pdfBuffer, filename, pageContent) {
-  const { PDFDocument } = require("pdf-lib");
+function canSaveDirectly(filterStr) {
+  const filterName = filterStr.replace(/^\//, '').split(' ')[0];
+
+  // These formats contain complete, standard image file data that can be saved directly
+  return ['DCTDecode', 'JPXDecode'].includes(filterName);
+}
+
+/**
+ * Attempt to convert raw/compressed image data to standard format using sharp
+ * For images that can be saved directly (JPEG, JP2), this returns the original data
+ * For others, attempts conversion to PNG
+ */
+async function convertImageIfNeeded(imageBytes, filterStr, imgWidth, imgHeight, colorSpaceStr, bitsPerComp) {
+  const filterName = filterStr.replace(/^\//, '').split(' ')[0];
+
+  // If it's already a standard format (JPEG, JPEG2000), return as-is
+  if (canSaveDirectly(filterStr)) {
+    return {
+      buffer: imageBytes,
+      ext: getImageExtension(filterStr, colorSpaceStr),
+      converted: false
+    };
+  }
+
+  // For other formats, try to use sharp to auto-detect and convert
+  try {
+    const buffer = Buffer.isBuffer(imageBytes) ? imageBytes : Buffer.from(imageBytes);
+
+    // Attempt to let sharp auto-detect the format and convert to PNG
+    const convertedBuffer = await sharp(buffer)
+      .png()
+      .toBuffer()
+      .catch(() => null);
+
+    if (convertedBuffer) {
+      console.log(`   ✅ Converted ${filterName} to PNG using sharp`);
+      return { buffer: convertedBuffer, ext: 'png', converted: true };
+    }
+
+    // If sharp couldn't handle it, save as .dat with the raw data
+    console.log(`   ⚠️  Could not convert ${filterName}, saving as .dat`);
+    return { buffer, ext: 'dat', converted: false };
+
+  } catch (error) {
+    // If conversion fails, return original data as .dat
+    console.log(`   ⚠️  Conversion failed for ${filterName}: ${error.message}, saving as .dat`);
+    const buffer = Buffer.isBuffer(imageBytes) ? imageBytes : Buffer.from(imageBytes);
+    return { buffer, ext: 'dat', converted: false };
+  }
+}
+
+/**
+ * Extract images using pdf-lib and save to disk
+ */
+async function extractImagesWithPdfLib(pdfPath, filename, pageContent) {
   const images = [];
 
   try {
+    // Determine storage path
+    const storagePath = process.env.STORAGE_DIR
+      ? path.resolve(process.env.STORAGE_DIR, 'extract_img')
+      : path.resolve(__dirname, '../../../../server/storage/extract_img');
+
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(storagePath)) {
+      fs.mkdirSync(storagePath, { recursive: true });
+      console.log(`📁 Created image storage directory: ${storagePath}`);
+    }
+
+    const pdfBuffer = fs.readFileSync(pdfPath);
     const pdfDoc = await PDFDocument.load(pdfBuffer);
     const pages = pdfDoc.getPages();
 
-    console.log(`Processing ${pages.length} pages for embedded images...`);
+    console.log(`Processing ${pages.length} pages for image extraction...`);
+
+    // Get the context for creating PDF names
+    const context = pdfDoc.context;
 
     for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
       const page = pages[pageIndex];
       const pageNumber = pageIndex + 1;
       const pageText = pageContent[pageIndex] || "";
 
-      // Extract embedded images using pdf-lib
-      const pageDict = page.node;
-      const resources = pageDict.get("Resources");
-
-      if (!resources || !resources.has("XObject")) {
-        continue;
-      }
-
-      const xObjects = resources.get("XObject");
-      const xObjectKeys = xObjects.entries();
-
-      let imgIndex = 0;
-      for (const [key, xObject] of xObjectKeys) {
-        const subtype = xObject.get("Subtype");
-
-        if (subtype && subtype.toString() === "/Image") {
-          try {
-            // Try to extract image dimensions and data
-            const width = xObject.get("Width");
-            const height = xObject.get("Height");
-
-            if (width && height) {
-              const imgWidth = typeof width === 'number' ? width : width.value || 0;
-              const imgHeight = typeof height === 'number' ? height : height.value || 0;
-
-              // Detect inline vs block images (like RAG does)
-              const isInlineImage = (imgWidth < 100 && imgHeight < 100) || (imgWidth < 50 || imgHeight < 50);
-
-              console.log(`📸 Image detected: ${imgWidth}x${imgHeight} (${isInlineImage ? 'inline' : 'block'})`);
-
-              // Extract context based on image type
-              const context = extractImageContext(pageText, pageNumber, imgIndex, isInlineImage);
-
-              const imageData = {
-                id: `${filename}_page${pageNumber}_embedded_${imgIndex}_${Date.now()}`,
-                pageNumber,
-                imageBuffer: null, // pdf-lib doesn't easily extract raw data
-                caption: context.caption,
-                surroundingText: context.surroundingText,
-                sectionTitle: context.sectionTitle,
-                documentName: filename,
-                extractionMethod: "pdf-lib-embedded",
-                isInline: isInlineImage,
-                dimensions: { width: imgWidth, height: imgHeight }
-              };
-
-              images.push(imageData);
-              imgIndex++;
-            }
-          } catch (err) {
-            console.warn(`Failed to process embedded image ${key}: ${err.message}`);
-          }
-        }
-      }
-    }
-
-    // Note: pdf-lib can detect but not easily extract image buffers
-    // If we found images, we need a fallback to get actual image data
-    if (images.length > 0 && !images[0].imageBuffer) {
-      console.log(`⚠️  pdf-lib detected ${images.length} images but cannot extract buffers`);
-      console.log(`   Falling back to pdfjs extraction...`);
-      return []; // Trigger fallback
-    }
-
-    return images;
-  } catch (error) {
-    console.warn(`pdf-lib embedded extraction failed: ${error.message}`);
-    return [];
-  }
-}
-
-/**
- * Enhanced pdfjs extraction that mimics PyMuPDF's page.get_images() approach
- */
-async function extractWithPdfJsEnhanced(pdfPath, filename, pageContent) {
-  const images = [];
-
-  try {
-    const pdfBuffer = fs.readFileSync(pdfPath);
-
-    // Use pdfjs-dist for Node.js instead of bundled pdf-parse version
-    const pdfjs = require("pdfjs-dist/legacy/build/pdf.js");
-
-    // Configure for Node.js environment (no DOM)
-    const pdf = await pdfjs.getDocument({
-      data: new Uint8Array(pdfBuffer),
-      useWorkerFetch: false,
-      isEvalSupported: false,
-      useSystemFonts: true,
-      standardFontDataUrl: null, // Disable font loading
-      disableFontFace: true, // Don't try to load fonts
-    }).promise;
-
-    console.log(`Processing ${pdf.numPages} pages with enhanced pdfjs...`);
-
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
       try {
-        const page = await pdf.getPage(pageNumber);
-        const pageText = pageContent[pageNumber - 1] || "";
+        // Access the page dictionary directly
+        const pageDict = page.node;
 
-        // Get operator list to detect images
-        const ops = await page.getOperatorList();
+        // Create PDFName objects for the keys we need
+        const { PDFName, asNumber } = require('pdf-lib');
+        const resourcesKey = PDFName.of('Resources');
+        const xobjectKey = PDFName.of('XObject');
+        const subtypeKey = PDFName.of('Subtype');
+        const imageType = PDFName.of('Image');
+
+        // Get Resources dictionary
+        const resourcesRef = pageDict.get(resourcesKey);
+        if (!resourcesRef) {
+          console.log(`No resources found on page ${pageNumber}`);
+          continue;
+        }
+
+        // Lookup the resources dictionary
+        const resources = context.lookup(resourcesRef);
+        if (!resources) {
+          console.log(`Could not resolve resources on page ${pageNumber}`);
+          continue;
+        }
+
+        // Get XObject dictionary
+        const xObjectRef = resources.get(xobjectKey);
+        if (!xObjectRef) {
+          console.log(`No XObjects found on page ${pageNumber}`);
+          continue;
+        }
+
+        // Lookup the XObject dictionary
+        const xObjects = context.lookup(xObjectRef);
+        if (!xObjects) {
+          console.log(`Could not resolve XObjects on page ${pageNumber}`);
+          continue;
+        }
+
+        // Get all keys in the XObject dictionary
+        const xObjectKeys = xObjects.entries();
+        console.log(`Found ${xObjectKeys.length} XObjects on page ${pageNumber}`);
 
         let imgIndex = 0;
-        for (let i = 0; i < ops.fnArray.length; i++) {
-          // OPS.paintImageXObject = 85, OPS.paintInlineImageXObject = 86
-          if (ops.fnArray[i] === 85 || ops.fnArray[i] === 86) {
-            const isInline = ops.fnArray[i] === 86;
+        for (const [name, xObjRef] of xObjectKeys) {
+          try {
+            const xObj = context.lookup(xObjRef);
 
-            console.log(`📸 pdfjs detected ${isInline ? 'inline' : 'block'} image on page ${pageNumber}`);
+            if (!xObj) {
+              continue;
+            }
 
-            // Extract context
-            const context = extractImageContext(pageText, pageNumber, imgIndex, isInline);
+            // XObject is likely a PDFStream, which has a dict property
+            const xObjDict = xObj.dict || xObj;
 
-            const imageData = {
-              id: `${filename}_page${pageNumber}_pdfjs_${imgIndex}_${Date.now()}`,
-              pageNumber,
-              imageBuffer: null, // Will be filled by page rendering if needed
-              caption: context.caption,
-              surroundingText: context.surroundingText,
-              sectionTitle: context.sectionTitle,
-              documentName: filename,
-              extractionMethod: "pdfjs-detection",
-              isInline: isInline
-            };
+            // Check if this is an image
+            const subtype = xObjDict.get(subtypeKey);
 
-            images.push(imageData);
-            imgIndex++;
+            if (subtype && subtype.toString() === imageType.toString()) {
+              console.log(`   Found image XObject: ${name}`);
+
+              // Extract image properties
+              const widthKey = PDFName.of('Width');
+              const heightKey = PDFName.of('Height');
+              const colorSpaceKey = PDFName.of('ColorSpace');
+              const bitsPerComponentKey = PDFName.of('BitsPerComponent');
+              const filterKey = PDFName.of('Filter');
+
+              const width = xObjDict.get(widthKey);
+              const height = xObjDict.get(heightKey);
+              const colorSpace = xObjDict.get(colorSpaceKey);
+              const bitsPerComponent = xObjDict.get(bitsPerComponentKey);
+              const filter = xObjDict.get(filterKey);
+
+              // Get numeric values using asNumber() helper
+              const imgWidth = width ? asNumber(width) : 0;
+              const imgHeight = height ? asNumber(height) : 0;
+
+              console.log(`   Image dimensions: ${imgWidth}x${imgHeight}`);
+
+              if (imgWidth > 0 && imgHeight > 0) {
+                // Get filter info first to determine extension
+                const filterStr = filter ? filter.toString() : 'none';
+                const colorSpaceStr = colorSpace ? colorSpace.toString() : 'unknown';
+                const bitsPerComp = bitsPerComponent ? asNumber(bitsPerComponent) : 8;
+
+                console.log(`   Filter: ${filterStr}, ColorSpace: ${colorSpaceStr}, BitsPerComponent: ${bitsPerComp}`);
+
+                // Detect inline vs block images
+                const isInlineImage = (imgWidth < 100 && imgHeight < 100) || (imgWidth < 50 || imgHeight < 50);
+
+                try {
+                  // Extract the image stream data - xObj should be a PDFStream
+                  let imageBytes;
+
+                  // Try different methods to get the contents
+                  if (typeof xObj.getContents === 'function') {
+                    console.log(`   Using getContents() method`);
+                    imageBytes = xObj.getContents();
+                  } else if (xObj.contents) {
+                    console.log(`   Using contents property`);
+                    imageBytes = xObj.contents;
+                  } else if (xObj.dict && xObj.dict.context) {
+                    // Try to get stream contents directly
+                    console.log(`   Trying to extract stream contents`);
+                    const streamKey = PDFName.of('Length');
+                    const length = xObjDict.get(streamKey);
+                    console.log(`   Stream length: ${length}`);
+
+                    // For PDFStream objects, we need to access the internal contents
+                    if (xObj.contents !== undefined) {
+                      imageBytes = xObj.contents;
+                    } else {
+                      throw new Error('Could not access stream contents');
+                    }
+                  } else {
+                    throw new Error('Could not extract image data - no known method available');
+                  }
+
+                  // Convert image to standard format if needed
+                  const conversionResult = await convertImageIfNeeded(
+                    imageBytes,
+                    filterStr,
+                    imgWidth,
+                    imgHeight,
+                    colorSpaceStr,
+                    bitsPerComp
+                  );
+
+                  const imageExt = conversionResult.ext;
+                  const imageBuffer = Buffer.isBuffer(conversionResult.buffer)
+                    ? conversionResult.buffer
+                    : Buffer.from(conversionResult.buffer);
+
+                  console.log(`📸 Image detected: ${imgWidth}x${imgHeight} (${isInlineImage ? 'inline' : 'block'}, format: ${imageExt}${conversionResult.converted ? ' - converted' : ''})`);
+
+                  // Create unique image filename with proper extension
+                  const timestamp = Date.now() + imgIndex; // Add imgIndex to ensure uniqueness
+                  const imageId = `${slugify(filename)}_page${pageNumber}_img${imgIndex}_${timestamp}`;
+                  const imageFileName = `${imageId}.${imageExt}`;
+                  const imageFilePath = path.join(storagePath, imageFileName);
+
+                  // Save image data
+                  fs.writeFileSync(imageFilePath, imageBuffer);
+                  console.log(`   ✅ Saved image to: ${imageFileName} (${imageBuffer.length} bytes)`);
+
+                  // Extract context based on image type
+                  const contextInfo = extractImageContext(pageText, pageNumber, imgIndex, isInlineImage);
+
+                  const imageMetadata = {
+                    id: imageId,
+                    pageNumber,
+                    fileName: imageFileName,
+                    filePath: imageFilePath,
+                    caption: contextInfo.caption,
+                    surroundingText: contextInfo.surroundingText,
+                    sectionTitle: contextInfo.sectionTitle,
+                    documentName: filename,
+                    extractionMethod: "pdf-lib",
+                    isInline: isInlineImage,
+                    format: imageExt,
+                    originalFilter: filterStr,
+                    converted: conversionResult.converted,
+                    dimensions: { width: imgWidth, height: imgHeight },
+                    colorSpace: colorSpaceStr,
+                    bitsPerComponent: bitsPerComp,
+                    sizeBytes: imageBuffer.length
+                  };
+
+                  images.push(imageMetadata);
+                  imgIndex++;
+                } catch (saveError) {
+                  console.warn(`   ⚠️  Failed to save image: ${saveError.message}`);
+                  console.warn(saveError.stack);
+                }
+              }
+            }
+          } catch (err) {
+            console.warn(`Failed to process XObject ${name}: ${err.message}`);
+            console.warn(err.stack);
           }
         }
       } catch (pageError) {
         console.warn(`Error processing page ${pageNumber}: ${pageError.message}`);
-      }
-    }
-
-    // If we detected images but don't have buffers, render pages
-    if (images.length > 0) {
-      console.log(`🎨 Rendering ${images.length} detected images...`);
-      await renderDetectedImages(pdf, images, filename);
-    }
-
-    return images;
-  } catch (error) {
-    console.error(`pdfjs enhanced extraction failed: ${error.message}`);
-    return [];
-  }
-}
-
-/**
- * Render detected images using canvas
- */
-async function renderDetectedImages(pdf, images, filename) {
-  // Check if canvas is available
-  let createCanvas;
-  try {
-    createCanvas = require("canvas").createCanvas;
-  } catch (err) {
-    console.warn(`⚠️  Canvas module not available for rendering: ${err.message}`);
-    console.log(`   Images detected but cannot be rendered. Install canvas dependencies if needed.`);
-    return;
-  }
-
-  for (const imageData of images) {
-    try {
-      const page = await pdf.getPage(imageData.pageNumber);
-      const viewport = page.getViewport({ scale: 2.0 });
-
-      const canvas = createCanvas(viewport.width, viewport.height);
-      const context = canvas.getContext("2d");
-
-      await page.render({
-        canvasContext: context,
-        viewport: viewport,
-      }).promise;
-
-      const imageBuffer = canvas.toBuffer("image/png");
-
-      if (imageBuffer.length > 10000) { // Minimum size check
-        imageData.imageBuffer = imageBuffer.toString("base64");
-      }
-    } catch (err) {
-      console.warn(`Failed to render image: ${err.message}`);
-    }
-  }
-}
-
-/**
- * Canvas-based page rendering (existing fallback)
- */
-async function extractWithCanvas(pdfPath, filename, pageContent) {
-  const images = [];
-
-  try {
-    // Check if canvas is available
-    let createCanvas;
-    try {
-      createCanvas = require("canvas").createCanvas;
-    } catch (err) {
-      console.warn(`⚠️  Canvas module not available: ${err.message}`);
-      console.log(`   Skipping canvas-based extraction. Install system dependencies if needed.`);
-      return [];
-    }
-
-    const pdfBuffer = fs.readFileSync(pdfPath);
-    const pdfjs = require("pdfjs-dist/legacy/build/pdf.js");
-
-    const pdf = await pdfjs.getDocument({
-      data: new Uint8Array(pdfBuffer),
-      useWorkerFetch: false,
-      isEvalSupported: false,
-      useSystemFonts: true,
-      standardFontDataUrl: null,
-      disableFontFace: true,
-    }).promise;
-
-    console.log(`Processing ${pdf.numPages} pages with canvas...`);
-
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-      try {
-        const page = await pdf.getPage(pageNumber);
-        const pageText = pageContent[pageNumber - 1] || "";
-        const viewport = page.getViewport({ scale: 2.0 });
-
-        const canvas = createCanvas(viewport.width, viewport.height);
-        const context = canvas.getContext("2d");
-
-        await page.render({
-          canvasContext: context,
-          viewport: viewport,
-        }).promise;
-
-        const imageBuffer = canvas.toBuffer("image/png");
-
-        if (imageBuffer.length > 50000) {
-          const context = extractImageContext(pageText, pageNumber, 0, false);
-
-          const imageData = {
-            id: `${filename}_page${pageNumber}_canvas_${Date.now()}`,
-            pageNumber,
-            imageBuffer: imageBuffer.toString("base64"),
-            caption: context.caption,
-            surroundingText: context.surroundingText,
-            sectionTitle: context.sectionTitle,
-            documentName: filename,
-            extractionMethod: "canvas-render",
-            isInline: false
-          };
-
-          images.push(imageData);
-        }
-      } catch (pageError) {
-        console.warn(`Failed to render page ${pageNumber}: ${pageError.message}`);
+        console.warn(pageError.stack);
       }
     }
 
     return images;
   } catch (error) {
-    console.error(`Canvas extraction failed: ${error.message}`);
+    console.error(`Error in pdf-lib image extraction: ${error.message}`);
+    console.error(error.stack);
     return [];
   }
 }
 
 /**
  * Extract image context from page text
- * Mimics RAG's context extraction logic
  */
 function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
   // Split text into sections
@@ -438,7 +429,7 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
   if (totalLines === 0) {
     return {
       caption: `Figure from page ${pageNumber}`,
-      surroundingText: `[IMAGE ${imgIndex + 1}]`,
+      surroundingText: `[IMAGE_${imgIndex + 1}]`,
       sectionTitle: ""
     };
   }
@@ -468,7 +459,7 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
 
     return {
       caption: `Inline image from page ${pageNumber}`,
-      surroundingText: surroundingText || `[INLINE IMAGE ${imgIndex + 1}]`,
+      surroundingText: surroundingText || `[INLINE_IMAGE_${imgIndex + 1}]`,
       sectionTitle
     };
   }
@@ -476,7 +467,6 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
   // For block images, extract preceding and following text
   const linesPerImage = Math.max(1, Math.floor(totalLines / 4));
   const startIdx = imgIndex * linesPerImage;
-  const endIdx = Math.min(totalLines, (imgIndex + 1) * linesPerImage);
 
   const precedingLines = lines.slice(Math.max(0, startIdx - 2), startIdx);
   const followingLines = lines.slice(startIdx, Math.min(totalLines, startIdx + 3));
@@ -508,13 +498,4 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
   };
 }
 
-// Export as the standard name for compatibility
 module.exports = asPdfMultimodal;
-
-// Also support enhanced name for explicit usage
-module.exports.asPdfMultimodalEnhanced = asPdfMultimodalEnhanced;
-
-// Keep old function name for backwards compatibility
-async function asPdfMultimodal(params) {
-  return await asPdfMultimodalEnhanced(params);
-}
