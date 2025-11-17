@@ -65,7 +65,26 @@ async function asPdfMultimodal({ fullFilePath = "", filename = "", options = {} 
   const images = await extractImagesWithPdfLib(fullFilePath, filename, pageContent);
   console.log(`-- Extracted ${images.length} images --`);
 
-  const content = pageContent.join("");
+  // Build content with inline image references
+  let contentWithImages = "";
+  for (let i = 0; i < pageContent.length; i++) {
+    contentWithImages += pageContent[i];
+
+    // Find images for this page (i+1 because pageNumber starts at 1)
+    const pageImages = images.filter(img => img.pageNumber === (i + 1));
+
+    // Insert image tags after each page's content
+    if (pageImages.length > 0) {
+      contentWithImages += "\n\n";
+      pageImages.forEach(img => {
+        // Create HTML img tag with web-accessible path
+        const imgTag = `<img src="/extract-images/${img.fileName}" alt="${img.caption}" title="${img.caption}" style="max-width: 100%; height: auto;" />\n`;
+        contentWithImages += imgTag;
+      });
+      contentWithImages += "\n";
+    }
+  }
+
   const data = {
     id: v4(),
     url: "file://" + fullFilePath,
@@ -75,9 +94,9 @@ async function asPdfMultimodal({ fullFilePath = "", filename = "", options = {} 
     docSource: "pdf file uploaded by the user.",
     chunkSource: "",
     published: createdDate(fullFilePath),
-    wordCount: content.split(" ").length,
-    pageContent: content,
-    token_count_estimate: tokenizeString(content),
+    wordCount: contentWithImages.split(" ").length,
+    pageContent: contentWithImages,
+    token_count_estimate: tokenizeString(contentWithImages),
 
     // Multimodal data - no imageBuffer stored
     images: images,
@@ -199,8 +218,8 @@ async function extractImagesWithPdfLib(pdfPath, filename, pageContent) {
   try {
     // Determine storage path
     const storagePath = process.env.STORAGE_DIR
-      ? path.resolve(process.env.STORAGE_DIR, 'extract_img')
-      : path.resolve(__dirname, '../../../../server/storage/extract_img');
+      ? path.resolve(process.env.STORAGE_DIR, 'extract-images')
+      : path.resolve(__dirname, '../../../../server/storage/extract-images');
 
     // Create directory if it doesn't exist
     if (!fs.existsSync(storagePath)) {
@@ -429,7 +448,7 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
   if (totalLines === 0) {
     return {
       caption: `Figure from page ${pageNumber}`,
-      surroundingText: `[IMAGE_${imgIndex + 1}]`,
+      surroundingText: "", // Will be replaced with actual img tag
       sectionTitle: ""
     };
   }
@@ -459,7 +478,7 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
 
     return {
       caption: `Inline image from page ${pageNumber}`,
-      surroundingText: surroundingText || `[INLINE_IMAGE_${imgIndex + 1}]`,
+      surroundingText: surroundingText || "", // Will be replaced with actual img tag
       sectionTitle
     };
   }
@@ -489,7 +508,8 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
     caption = `Figure from page ${pageNumber}`;
   }
 
-  const surroundingText = `${precedingText} [IMAGE_HERE] ${followingText}`;
+  // Surrounding text without placeholder - image tag will be inserted during response generation
+  const surroundingText = `${precedingText} ${followingText}`;
 
   return {
     caption,

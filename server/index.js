@@ -49,6 +49,17 @@ if (!!process.env.ENABLE_HTTPS) {
   require("@mintplex-labs/express-ws").default(app); // load WebSockets in non-SSL mode.
 }
 
+// Serve extracted images from storage directory
+app.use(
+  "/extract-images",
+  express.static(path.resolve(__dirname, "../server/storage/extract-images"), {
+    setHeaders: (res) => {
+      res.removeHeader("X-Powered-By");
+      res.setHeader("Cache-Control", "public, max-age=86400"); // Cache for 24 hours
+    },
+  })
+);
+
 app.use("/api", apiRouter);
 systemEndpoints(apiRouter);
 extensionEndpoints(apiRouter);
