@@ -219,7 +219,7 @@ async function extractImagesWithPdfLib(pdfPath, filename, pageContent) {
     // Determine storage path
     const storagePath = process.env.STORAGE_DIR
       ? path.resolve(process.env.STORAGE_DIR, 'extract-images')
-      : path.resolve(__dirname, '../../../../server/storage/extract-images');
+      : path.resolve(__dirname, '../../../../frontend/src/extract-images');
 
     // Create directory if it doesn't exist
     if (!fs.existsSync(storagePath)) {
