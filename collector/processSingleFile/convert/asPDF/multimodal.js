@@ -78,7 +78,7 @@ async function asPdfMultimodal({ fullFilePath = "", filename = "", options = {} 
       contentWithImages += "\n\n";
       pageImages.forEach(img => {
         // Create HTML img tag with web-accessible path
-        const imgTag = `<img src="/extract-images/${img.fileName}" alt="${img.caption}" title="${img.caption}" style="max-width: 100%; height: auto;" />\n`;
+        const imgTag = `<img src="/src/extract-images/${img.fileName}" alt="${img.caption}" title="${img.caption}" style="max-width: 100%; height: auto;" />\n`;
         contentWithImages += imgTag;
       });
       contentWithImages += "\n";
@@ -113,7 +113,7 @@ async function asPdfMultimodal({ fullFilePath = "", filename = "", options = {} 
   trashFile(fullFilePath);
   console.log(
     `[SUCCESS]: ${filename} converted & ready for multimodal embedding.\n` +
-    `Text content: ${content.length} chars, Images: ${images.length}\n`
+    `Text content: ${contentWithImages.length} chars, Images: ${images.length}\n`
   );
 
   return { success: true, reason: null, documents: [document] };

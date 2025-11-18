@@ -7,7 +7,7 @@ import "./themes/github.css";
 import { v4 } from "uuid";
 
 const markdown = markdownIt({
-  html: false,
+  html: true,
   typographer: true,
   highlight: function (code, lang) {
     const uuid = v4();
@@ -69,6 +69,41 @@ markdown.renderer.rules.image = function (tokens, idx) {
   const alt = token.content || "";
 
   return `<div class="w-full max-w-[800px]"><img src="${src}" alt="${alt}" class="w-full h-auto" /></div>`;
+};
+
+// Custom paragraph renderer to prevent wrapping <img> tags in <p> tags
+const defaultParagraphOpen = markdown.renderer.rules.paragraph_open ||
+  function(tokens, idx, options, env, self) {
+    return self.renderToken(tokens, idx, options);
+  };
+
+const defaultParagraphClose = markdown.renderer.rules.paragraph_close ||
+  function(tokens, idx, options, env, self) {
+    return self.renderToken(tokens, idx, options);
+  };
+
+markdown.renderer.rules.paragraph_open = function(tokens, idx, options, env, self) {
+  // Check if paragraph contains only an img tag (inline HTML)
+  const nextToken = tokens[idx + 1];
+  if (nextToken && nextToken.type === 'inline' && nextToken.content) {
+    const imgTagPattern = /^\s*<img[^>]*>\s*$/i;
+    if (imgTagPattern.test(nextToken.content)) {
+      return '';
+    }
+  }
+  return defaultParagraphOpen(tokens, idx, options, env, self);
+};
+
+markdown.renderer.rules.paragraph_close = function(tokens, idx, options, env, self) {
+  // Check if paragraph contains only an img tag (inline HTML)
+  const prevToken = tokens[idx - 1];
+  if (prevToken && prevToken.type === 'inline' && prevToken.content) {
+    const imgTagPattern = /^\s*<img[^>]*>\s*$/i;
+    if (imgTagPattern.test(prevToken.content)) {
+      return '';
+    }
+  }
+  return defaultParagraphClose(tokens, idx, options, env, self);
 };
 
 markdown.use(markdownItKatexPlugin);
