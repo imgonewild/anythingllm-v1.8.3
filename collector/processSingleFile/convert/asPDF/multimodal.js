@@ -65,7 +65,7 @@ async function asPdfMultimodal({ fullFilePath = "", filename = "", options = {} 
   const images = await extractImagesWithPdfLib(fullFilePath, filename, pageContent);
   console.log(`-- Extracted ${images.length} images --`);
 
-  // Build content with inline image references
+  // Build content with inline image references using markdown format
   let contentWithImages = "";
   for (let i = 0; i < pageContent.length; i++) {
     contentWithImages += pageContent[i];
@@ -73,13 +73,14 @@ async function asPdfMultimodal({ fullFilePath = "", filename = "", options = {} 
     // Find images for this page (i+1 because pageNumber starts at 1)
     const pageImages = images.filter(img => img.pageNumber === (i + 1));
 
-    // Insert image tags after each page's content
+    // Insert markdown image tags after each page's content
     if (pageImages.length > 0) {
       contentWithImages += "\n\n";
-      pageImages.forEach(img => {
-        // Create HTML img tag with web-accessible path
-        const imgTag = `<img src="/src/extract-images/${img.fileName}" alt="${img.caption}" title="${img.caption}" style="max-width: 100%; height: auto;" />\n`;
-        contentWithImages += imgTag;
+      pageImages.forEach((img, idx) => {
+        // Create markdown format: ![Figure {FIGURE_TITLE} from page {PAGE}](src/extract-images/{FILENAME} "{FIGURE_TITLE}")
+        const figureTitle = img.caption || `Image ${idx + 1}`;
+        const markdownImg = `![Figure ${figureTitle} from page ${img.pageNumber}](src/extract-images/${img.fileName} "${figureTitle}")\n`;
+        contentWithImages += markdownImg;
       });
       contentWithImages += "\n";
     }
@@ -109,6 +110,9 @@ async function asPdfMultimodal({ fullFilePath = "", filename = "", options = {} 
     filename: `${slugify(filename)}-${data.id}`,
     options: { parseOnly: options.parseOnly },
   });
+
+  // Generate markdown file alongside the document
+  await generateMarkdownFile(filename, docs, contentWithImages, images, data);
 
   trashFile(fullFilePath);
   console.log(
@@ -180,6 +184,60 @@ async function convertImageIfNeeded(imageBytes, filterStr, imgWidth, imgHeight, 
       ext: getImageExtension(filterStr, colorSpaceStr),
       converted: false
     };
+  }
+
+  // Special handling for FlateDecode (zlib-compressed raw pixel data)
+  if (filterName === 'FlateDecode') {
+    try {
+      const zlib = require('zlib');
+      const buffer = Buffer.isBuffer(imageBytes) ? imageBytes : Buffer.from(imageBytes);
+
+      // Decompress the FlateDecode data
+      const decompressed = zlib.inflateSync(buffer);
+
+      // Determine channels based on colorspace
+      const colorSpace = colorSpaceStr.replace(/^\//, '').split(' ')[0];
+      let channels = 1; // Default to grayscale
+
+      if (colorSpace === 'DeviceRGB' || colorSpace === 'RGB') {
+        channels = 3;
+      } else if (colorSpace === 'DeviceCMYK' || colorSpace === 'CMYK') {
+        channels = 4;
+      } else if (colorSpace === 'DeviceGray' || colorSpace === 'Gray') {
+        channels = 1;
+      }
+
+      // Create image from raw pixel data using sharp
+      const sharpInstance = sharp(decompressed, {
+        raw: {
+          width: imgWidth,
+          height: imgHeight,
+          channels: channels
+        }
+      });
+
+      // Convert CMYK to RGB if needed
+      if (channels === 4) {
+        // For CMYK, we need to convert to RGB
+        const convertedBuffer = await sharpInstance
+          .toColorspace('srgb')
+          .png()
+          .toBuffer();
+        console.log(`   ✅ Converted FlateDecode CMYK image to PNG`);
+        return { buffer: convertedBuffer, ext: 'png', converted: true };
+      } else {
+        // For RGB or grayscale, just convert to PNG
+        const convertedBuffer = await sharpInstance
+          .png()
+          .toBuffer();
+        console.log(`   ✅ Converted FlateDecode image to PNG`);
+        return { buffer: convertedBuffer, ext: 'png', converted: true };
+      }
+    } catch (error) {
+      console.log(`   ⚠️  FlateDecode conversion failed: ${error.message}, saving as .dat`);
+      const buffer = Buffer.isBuffer(imageBytes) ? imageBytes : Buffer.from(imageBytes);
+      return { buffer, ext: 'dat', converted: false };
+    }
   }
 
   // For other formats, try to use sharp to auto-detect and convert
@@ -516,6 +574,70 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
     surroundingText,
     sectionTitle
   };
+}
+
+/**
+ * Generate a standalone markdown file with embedded images
+ * @param {string} filename - Original PDF filename
+ * @param {Array} docs - Array of document pages with metadata
+ * @param {string} contentWithImages - Full content with embedded image references
+ * @param {Array} images - Array of extracted image metadata
+ * @param {Object} data - Document data object
+ */
+async function generateMarkdownFile(filename, docs, contentWithImages, images, data) {
+  try {
+    // Determine storage path (same as image storage)
+    const storagePath = process.env.STORAGE_DIR
+      ? path.resolve(process.env.STORAGE_DIR, 'extract-images')
+      : path.resolve(__dirname, '../../../../frontend/src/extract-images');
+
+    // Create markdown filename based on PDF name
+    const baseFilename = filename.replace(/\.pdf$/i, '');
+    const mdFilename = `${slugify(baseFilename)}.md`;
+    const mdFilePath = path.join(storagePath, mdFilename);
+
+    // Build markdown content
+    let markdownContent = '';
+
+    // Add metadata header
+    markdownContent += `# ${filename}\n\n`;
+    markdownContent += `---\n\n`;
+    markdownContent += `**Author**: ${data.docAuthor}\n\n`;
+    markdownContent += `**Title**: ${data.description}\n\n`;
+    markdownContent += `**Published**: ${data.published}\n\n`;
+    markdownContent += `**Pages**: ${docs.length}\n\n`;
+    markdownContent += `**Images**: ${images.length}\n\n`;
+    markdownContent += `**Word Count**: ${data.wordCount}\n\n`;
+    markdownContent += `---\n\n`;
+
+    // Add the full content with embedded images
+    markdownContent += contentWithImages;
+
+    // Add image reference table at the end
+    if (images.length > 0) {
+      markdownContent += `\n\n---\n\n## Image References\n\n`;
+      markdownContent += `| Page | Image | Caption | Dimensions | Format |\n`;
+      markdownContent += `|------|-------|---------|------------|--------|\n`;
+
+      images.forEach((img, idx) => {
+        const dimensions = `${img.dimensions.width}x${img.dimensions.height}`;
+        const caption = img.caption || 'N/A';
+        markdownContent += `| ${img.pageNumber} | ${idx + 1} | ${caption} | ${dimensions} | ${img.format} |\n`;
+      });
+    }
+
+    // Write markdown file to disk
+    fs.writeFileSync(mdFilePath, markdownContent, 'utf8');
+    console.log(`📝 Generated markdown file: ${mdFilename}`);
+    console.log(`   Path: ${mdFilePath}`);
+    console.log(`   Size: ${markdownContent.length} characters`);
+
+    return mdFilePath;
+  } catch (error) {
+    console.error(`Error generating markdown file: ${error.message}`);
+    console.error(error.stack);
+    return null;
+  }
 }
 
 module.exports = asPdfMultimodal;

@@ -51,7 +51,7 @@ if (!!process.env.ENABLE_HTTPS) {
 
 // Serve extracted images from frontend directory
 app.use(
-  "/extract-images",
+  "/src/extract-images",
   express.static(path.resolve(__dirname, "../frontend/src/extract-images"), {
     setHeaders: (res) => {
       res.removeHeader("X-Powered-By");

@@ -65,10 +65,26 @@ markdown.renderer.rules.link_open = (tokens, idx) => {
 markdown.renderer.rules.image = function (tokens, idx) {
   const token = tokens[idx];
   const srcIndex = token.attrIndex("src");
-  const src = token.attrs[srcIndex][1];
+  let src = token.attrs[srcIndex][1];
   const alt = token.content || "";
+  const titleIndex = token.attrIndex("title");
+  const title = titleIndex >= 0 ? token.attrs[titleIndex][1] : alt;
 
-  return `<div class="w-full max-w-[800px]"><img src="${src}" alt="${alt}" class="w-full h-auto" /></div>`;
+  // Handle extracted images from multimodal processing
+  // Convert relative paths like "src/extract-images/..." to absolute "/src/extract-images/..."
+  if (src.startsWith("src/extract-images/")) {
+    src = "/" + src; // Add leading slash -> "/src/extract-images/..."
+  } else if (src.startsWith("extract-images/")) {
+    src = "/src/" + src; // Add "/src/" prefix -> "/src/extract-images/..."
+  } else if (src.startsWith("/extract-images/")) {
+    src = "/src" + src; // Convert "/extract-images/" -> "/src/extract-images/..."
+  }
+
+  // Render image with responsive wrapper and proper attributes
+  return `<div class="w-full max-w-[800px] my-4">
+    <img src="${src}" alt="${alt}" title="${title}" class="w-full h-auto rounded-lg shadow-md" loading="lazy" />
+    ${title && title !== alt ? `<p class="text-xs text-gray-400 mt-2 italic">${title}</p>` : ''}
+  </div>`;
 };
 
 // Custom paragraph renderer to prevent wrapping <img> tags in <p> tags
@@ -83,11 +99,20 @@ const defaultParagraphClose = markdown.renderer.rules.paragraph_close ||
   };
 
 markdown.renderer.rules.paragraph_open = function(tokens, idx, options, env, self) {
-  // Check if paragraph contains only an img tag (inline HTML)
+  // Check if paragraph contains only an img tag (inline HTML or markdown image)
   const nextToken = tokens[idx + 1];
-  if (nextToken && nextToken.type === 'inline' && nextToken.content) {
-    const imgTagPattern = /^\s*<img[^>]*>\s*$/i;
-    if (imgTagPattern.test(nextToken.content)) {
+  if (nextToken && nextToken.type === 'inline') {
+    // Check for inline HTML img tags
+    if (nextToken.content) {
+      const imgTagPattern = /^\s*<img[^>]*>\s*$/i;
+      if (imgTagPattern.test(nextToken.content)) {
+        return '';
+      }
+    }
+
+    // Check for markdown images (rendered through image token)
+    if (nextToken.children && nextToken.children.length === 1 &&
+        nextToken.children[0].type === 'image') {
       return '';
     }
   }
@@ -95,11 +120,20 @@ markdown.renderer.rules.paragraph_open = function(tokens, idx, options, env, sel
 };
 
 markdown.renderer.rules.paragraph_close = function(tokens, idx, options, env, self) {
-  // Check if paragraph contains only an img tag (inline HTML)
+  // Check if paragraph contains only an img tag (inline HTML or markdown image)
   const prevToken = tokens[idx - 1];
-  if (prevToken && prevToken.type === 'inline' && prevToken.content) {
-    const imgTagPattern = /^\s*<img[^>]*>\s*$/i;
-    if (imgTagPattern.test(prevToken.content)) {
+  if (prevToken && prevToken.type === 'inline') {
+    // Check for inline HTML img tags
+    if (prevToken.content) {
+      const imgTagPattern = /^\s*<img[^>]*>\s*$/i;
+      if (imgTagPattern.test(prevToken.content)) {
+        return '';
+      }
+    }
+
+    // Check for markdown images (rendered through image token)
+    if (prevToken.children && prevToken.children.length === 1 &&
+        prevToken.children[0].type === 'image') {
       return '';
     }
   }

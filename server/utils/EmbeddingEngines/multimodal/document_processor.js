@@ -18,7 +18,7 @@ const sharp = require("sharp");
 class DocumentProcessor {
   constructor() {
     this.supportedFormats = [".pdf", ".docx", ".doc", ".txt"];
-    this.chunkSize = 500; // characters per text chunk
+    this.chunkSize = 1500; // characters per text chunk
     this.ocrWorker = null;
 
     this.log("DocumentProcessor initialized");

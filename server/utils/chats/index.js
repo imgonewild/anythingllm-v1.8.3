@@ -95,7 +95,7 @@ async function chatPrompt(workspace, user = null) {
 
   // If multimodal embedder is enabled, add image reference instructions
   if (process.env.EMBEDDING_ENGINE === 'multimodal') {
-    basePrompt += `\n\nWhen relevant images are provided in the context (marked as [Image 1], [Image 2], etc.), reference them in your response using the same notation. For example: "The network diagram shows the server layout [Image 1]" or "As illustrated in [Image 2], the connection process involves three steps."`;
+    basePrompt += `\n\nIMPORTANT: When the context contains images in markdown format like ![Figure from page X](src/extract-images/filename.png "caption"), you MUST include them in your response using the EXACT same markdown syntax. Copy the entire markdown image reference as-is, including the path and caption. For example, if the context shows "![Figure System Architecture from page 3](src/extract-images/doc_page3.png "System Architecture")", include it in your response exactly like that. Do not modify the syntax or convert it to any other format.`;
   }
 
   return await SystemPromptVariables.expandSystemPromptVariables(

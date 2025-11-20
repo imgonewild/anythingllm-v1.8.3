@@ -82,7 +82,7 @@ const SystemSettings = {
           `Failed to run validation function on text_splitter_chunk_size`,
           e.message
         );
-        return 1000;
+        return 1500;
       }
     },
     text_splitter_chunk_overlap: (update) => {

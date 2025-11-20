@@ -25,7 +25,7 @@ class TextSplitter {
    * Creates a new TextSplitter instance.
    * @param {Object} config
    * @param {string} [config.chunkPrefix = ""] - Prefix to be added to the start of each chunk.
-   * @param {number} [config.chunkSize = 1000] - The size of each chunk.
+   * @param {number} [config.chunkSize = 1500] - The size of each chunk.
    * @param {number} [config.chunkOverlap = 20] - The overlap between chunks.
    * @param {Object} [config.chunkHeaderMeta = null] - Metadata to be added to the start of each chunk - will come after the prefix.
    */
@@ -150,13 +150,13 @@ class TextSplitter {
    * Sets the splitter to use a defined config passes to other subclasses.
    * @param {Object} config
    * @param {string} [config.chunkPrefix = ""] - Prefix to be added to the start of each chunk.
-   * @param {number} [config.chunkSize = 1000] - The size of each chunk.
+   * @param {number} [config.chunkSize = 1500] - The size of each chunk.
    * @param {number} [config.chunkOverlap = 20] - The overlap between chunks.
    */
   #setSplitter(config = {}) {
     // if (!config?.splitByFilename) {// TODO do something when specific extension is present? }
     return new RecursiveSplitter({
-      chunkSize: isNaN(config?.chunkSize) ? 1_000 : Number(config?.chunkSize),
+      chunkSize: isNaN(config?.chunkSize) ? 1_500 : Number(config?.chunkSize),
       chunkOverlap: isNaN(config?.chunkOverlap)
         ? 20
         : Number(config?.chunkOverlap),
