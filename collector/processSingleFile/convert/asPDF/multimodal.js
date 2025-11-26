@@ -77,9 +77,14 @@ async function asPdfMultimodal({ fullFilePath = "", filename = "", options = {} 
     if (pageImages.length > 0) {
       contentWithImages += "\n\n";
       pageImages.forEach((img, idx) => {
-        // Create markdown format: ![Figure {FIGURE_TITLE} from page {PAGE}](src/extract-images/{FILENAME} "{FIGURE_TITLE}")
+        // Create markdown format: ![Figure {FIGURE_TITLE} from page {PAGE}](src/extract-images/{FILENAME_DIR}/{IMAGE_FILE} "{FIGURE_TITLE}")
         const figureTitle = img.caption || `Image ${idx + 1}`;
-        const markdownImg = `![Figure ${figureTitle} from page ${img.pageNumber}](src/extract-images/${img.fileName} "${figureTitle}")\n`;
+        // Extract directory name and filename from the image metadata
+        const imagePath = path.relative(
+          path.join(process.env.STORAGE_DIR || path.resolve(__dirname, '../../../../frontend/src'), 'extract-images'),
+          img.filePath
+        );
+        const markdownImg = `![Figure ${figureTitle} from page ${img.pageNumber}](src/extract-images/${imagePath} "${figureTitle}")\n`;
         contentWithImages += markdownImg;
       });
       contentWithImages += "\n";
@@ -274,10 +279,15 @@ async function extractImagesWithPdfLib(pdfPath, filename, pageContent) {
   const images = [];
 
   try {
-    // Determine storage path
-    const storagePath = process.env.STORAGE_DIR
+    // Determine base storage path
+    const baseStoragePath = process.env.STORAGE_DIR
       ? path.resolve(process.env.STORAGE_DIR, 'extract-images')
       : path.resolve(__dirname, '../../../../frontend/src/extract-images');
+
+    // Create filename-specific subdirectory
+    const baseFilename = filename.replace(/\.pdf$/i, '');
+    const filenameSlug = slugify(baseFilename);
+    const storagePath = path.join(baseStoragePath, filenameSlug);
 
     // Create directory if it doesn't exist
     if (!fs.existsSync(storagePath)) {
@@ -435,11 +445,10 @@ async function extractImagesWithPdfLib(pdfPath, filename, pageContent) {
 
                   console.log(`📸 Image detected: ${imgWidth}x${imgHeight} (${isInlineImage ? 'inline' : 'block'}, format: ${imageExt}${conversionResult.converted ? ' - converted' : ''})`);
 
-                  // Create unique image filename with proper extension
-                  const timestamp = Date.now() + imgIndex; // Add imgIndex to ensure uniqueness
-                  const imageId = `${slugify(filename)}_page${pageNumber}_img${imgIndex}_${timestamp}`;
-                  const imageFileName = `${imageId}.${imageExt}`;
+                  // Create image filename with new structure: page{N}_image{M}.{ext}
+                  const imageFileName = `page${pageNumber}_image${imgIndex}.${imageExt}`;
                   const imageFilePath = path.join(storagePath, imageFileName);
+                  const imageId = `${filenameSlug}_page${pageNumber}_img${imgIndex}`;
 
                   // Save image data
                   fs.writeFileSync(imageFilePath, imageBuffer);
@@ -586,14 +595,16 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
  */
 async function generateMarkdownFile(filename, docs, contentWithImages, images, data) {
   try {
-    // Determine storage path (same as image storage)
-    const storagePath = process.env.STORAGE_DIR
+    // Determine storage path (same as image storage - inside filename subdirectory)
+    const baseStoragePath = process.env.STORAGE_DIR
       ? path.resolve(process.env.STORAGE_DIR, 'extract-images')
       : path.resolve(__dirname, '../../../../frontend/src/extract-images');
 
     // Create markdown filename based on PDF name
     const baseFilename = filename.replace(/\.pdf$/i, '');
-    const mdFilename = `${slugify(baseFilename)}.md`;
+    const filenameSlug = slugify(baseFilename);
+    const storagePath = path.join(baseStoragePath, filenameSlug);
+    const mdFilename = `${filenameSlug}.md`;
     const mdFilePath = path.join(storagePath, mdFilename);
 
     // Build markdown content
