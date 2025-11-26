@@ -9,9 +9,25 @@ const {
 } = require(".");
 const { Document } = require("../../models/documents");
 const { Workspace } = require("../../models/workspace");
+const { cleanupMultimodalAssets } = require("./cleanupMultimodalAssets");
 
 async function purgeDocument(filename = null) {
   if (!filename || !normalizePath(filename)) return;
+
+  // Clean up multimodal assets (images and markdown) before deleting document
+  try {
+    console.log(`[purgeDocument] Checking for multimodal assets to clean up for: ${filename}`);
+    const cleanupResult = await cleanupMultimodalAssets(filename);
+    if (cleanupResult.success && cleanupResult.removedFiles.length > 0) {
+      console.log(`[purgeDocument] Cleaned up ${cleanupResult.removedFiles.length} multimodal asset(s)`);
+    }
+    if (cleanupResult.errors.length > 0) {
+      console.warn(`[purgeDocument] Cleanup warnings: ${cleanupResult.errors.join(", ")}`);
+    }
+  } catch (error) {
+    console.error(`[purgeDocument] Error during multimodal cleanup: ${error.message}`);
+    // Continue with document deletion even if cleanup fails
+  }
 
   await purgeVectorCache(filename);
   await purgeSourceDocument(filename);
@@ -61,6 +77,26 @@ async function purgeFolder(folderName = null) {
   const workspaces = await Workspace.where();
 
   const purgePromises = [];
+
+  // Clean up multimodal assets for each document
+  for (const filename of filenames) {
+    const rmMultimodalAssets = () =>
+      new Promise((resolve) => {
+        cleanupMultimodalAssets(filename)
+          .then((result) => {
+            if (result.success && result.removedFiles.length > 0) {
+              console.log(`[purgeFolder] Cleaned up multimodal assets for: ${filename}`);
+            }
+            resolve(true);
+          })
+          .catch((error) => {
+            console.error(`[purgeFolder] Error cleaning multimodal assets for ${filename}: ${error.message}`);
+            resolve(true); // Continue even if cleanup fails
+          });
+      });
+    purgePromises.push(rmMultimodalAssets);
+  }
+
   // Remove associated Vector-cache files
   for (const filename of filenames) {
     const rmVectorCache = () =>

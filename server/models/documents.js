@@ -148,12 +148,27 @@ const Document = {
     const VectorDb = getVectorDbClass();
     if (removals.length === 0) return;
 
+    // Import cleanup function
+    const { cleanupMultimodalAssets } = require("../utils/files/cleanupMultimodalAssets");
+
     for (const path of removals) {
       const document = await this.get({
         docpath: path,
         workspaceId: workspace.id,
       });
       if (!document) continue;
+
+      // Clean up multimodal assets before removing document
+      try {
+        const cleanupResult = await cleanupMultimodalAssets(path);
+        if (cleanupResult.success && cleanupResult.removedFiles.length > 0) {
+          console.log(`[removeDocuments] Cleaned up ${cleanupResult.removedFiles.length} multimodal asset(s) for: ${path}`);
+        }
+      } catch (error) {
+        console.error(`[removeDocuments] Error cleaning multimodal assets for ${path}: ${error.message}`);
+        // Continue with document removal even if cleanup fails
+      }
+
       await VectorDb.deleteDocumentFromNamespace(
         workspace.slug,
         document.docId
