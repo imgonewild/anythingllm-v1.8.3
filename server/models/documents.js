@@ -82,21 +82,54 @@ const Document = {
 
   addDocuments: async function (workspace, additions = [], userId = null) {
     const VectorDb = getVectorDbClass();
-    if (additions.length === 0) return { failed: [], embedded: [] };
+    if (additions.length === 0) return { failed: [], embedded: [], duplicates: [] };
     const { fileData } = require("../utils/files");
     const embedded = [];
     const failedToEmbed = [];
+    const duplicates = [];
     const errors = new Set();
 
+    // Fetch existing workspace documents once for duplicate checking (performance optimization)
+    const existingDocs = await this.where({ workspaceId: workspace.id });
+    const existingTitles = new Set(
+      existingDocs
+        .map(doc => {
+          try {
+            const metadata = JSON.parse(doc.metadata);
+            return metadata.title;
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter(title => title !== null)
+    );
+
+    // Check for duplicates before processing
     for (const path of additions) {
+      const filename = path.split("/")[1];
+
+      // Load document data to get original title
       const data = await fileData(path);
       if (!data) continue;
+
+      const originalTitle = data.title;
+
+      // Check if document with same original title already exists in this workspace
+      if (existingTitles.has(originalTitle)) {
+        console.warn(`[addDocuments] Duplicate file detected: "${originalTitle}" already exists in workspace ${workspace.slug}`);
+        duplicates.push(originalTitle);
+        errors.add(`File "${originalTitle}" already exists in this workspace. Please remove the existing file first or rename the new file.`);
+        continue;
+      }
+
+      // Add to existingTitles set for subsequent uploads in this batch
+      existingTitles.add(originalTitle);
 
       const docId = uuidv4();
       const { pageContent, ...metadata } = data;
       const newDoc = {
         docId,
-        filename: path.split("/")[1],
+        filename: filename,
         docpath: path,
         workspaceId: workspace.id,
         metadata: JSON.stringify(metadata),
@@ -137,11 +170,16 @@ const Document = {
       "workspace_documents_added",
       {
         workspaceName: workspace?.name || "Unknown Workspace",
-        numberOfDocumentsAdded: additions.length,
+        numberOfDocumentsAdded: embedded.length,
       },
       userId
     );
-    return { failedToEmbed, errors: Array.from(errors), embedded };
+    return {
+      failedToEmbed,
+      duplicates,
+      errors: Array.from(errors),
+      embedded
+    };
   },
 
   removeDocuments: async function (workspace, removals = [], userId = null) {

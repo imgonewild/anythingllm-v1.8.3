@@ -95,19 +95,7 @@ async function chatPrompt(workspace, user = null) {
 
   // If multimodal embedder is enabled, add image reference instructions
   if (process.env.EMBEDDING_ENGINE === "multimodal") {
-    basePrompt += `\n\nYou are a helpful assistant that answers questions based on provided document content.
-        You have access to both text content and images from documents.
-
-        When answering:
-        1. Use the provided text content to form your response
-        2. Reference specific images when they are relevant to the the text content you reference.
-        3. If images contain important information, mention what they show
-        4. Each image should be annotated exactly once
-        5. If images contain important information, mention what they show
-        6. If you cannot find relevant information, say so clearly
-        7. Always prioritize accuracy over completeness
-
-        Format your response in a clear, helpful manner.`;
+    basePrompt += `\n\nPlease return all related images and rearrange the images according to the response. IMPORTANT: When the context contains images in markdown format like ![Figure from page X](src/extract-images/filename.png "caption"), you MUST include them in your response using the EXACT same markdown syntax. Copy the entire markdown image reference as-is, including the path and caption. For example, if the context shows "![Figure System Architecture from page 3](src/extract-images/doc_page3.png "System Architecture")", include it in your response exactly like that. Do not modify the syntax or convert it to any other format.`;
   }
 
   return await SystemPromptVariables.expandSystemPromptVariables(

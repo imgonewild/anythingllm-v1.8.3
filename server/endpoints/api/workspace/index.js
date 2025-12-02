@@ -510,11 +510,33 @@ function apiWorkspaceEndpoints(app) {
         }
 
         await Document.removeDocuments(currWorkspace, deletes);
-        await Document.addDocuments(currWorkspace, adds);
+        const {
+          failedToEmbed = [],
+          duplicates = [],
+          errors = []
+        } = await Document.addDocuments(currWorkspace, adds);
+
         const updatedWorkspace = await Workspace.get({
           id: Number(currWorkspace.id),
         });
-        response.status(200).json({ workspace: updatedWorkspace });
+
+        // Build error message if there are duplicates or failures
+        let message = null;
+        if (duplicates.length > 0 || failedToEmbed.length > 0) {
+          const errorParts = [];
+          if (duplicates.length > 0) {
+            errorParts.push(`Duplicate files: ${duplicates.join(", ")}`);
+          }
+          if (failedToEmbed.length > 0) {
+            errorParts.push(`Failed to embed: ${failedToEmbed.join(", ")}`);
+          }
+          message = errorParts.join(". ");
+        }
+
+        response.status(200).json({
+          workspace: updatedWorkspace,
+          message: message
+        });
       } catch (e) {
         console.error(e.message, e);
         response.sendStatus(500).end();

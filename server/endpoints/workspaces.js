@@ -234,20 +234,45 @@ function workspaceEndpoints(app) {
           deletes,
           response.locals?.user?.id
         );
-        const { failedToEmbed = [], errors = [] } = await Document.addDocuments(
+        const {
+          failedToEmbed = [],
+          duplicates = [],
+          errors = []
+        } = await Document.addDocuments(
           currWorkspace,
           adds,
           response.locals?.user?.id
         );
         const updatedWorkspace = await Workspace.get({ id: currWorkspace.id });
+
+        // Build appropriate error message
+        let message = null;
+        const errorMessages = [];
+
+        if (duplicates.length > 0) {
+          errorMessages.push(
+            `❌ Duplicate files detected (${duplicates.length}):\n${duplicates
+              .map((filename) => `  • ${filename}`)
+              .join("\n")}\n\nThese files already exist in the workspace. Please remove the existing files first or rename the new files.`
+          );
+        }
+
+        if (failedToEmbed.length > 0) {
+          errorMessages.push(
+            `⚠️ Failed to embed ${failedToEmbed.length} document(s):\n${errors
+              .filter((msg) => !msg.includes("already exists"))
+              .map((msg) => `  • ${msg}`)
+              .join("\n")}`
+          );
+        }
+
+        if (errorMessages.length > 0) {
+          message = errorMessages.join("\n\n");
+        }
+
         response.status(200).json({
           workspace: updatedWorkspace,
-          message:
-            failedToEmbed.length > 0
-              ? `${failedToEmbed.length} documents failed to add.\n\n${errors
-                  .map((msg) => `${msg}`)
-                  .join("\n\n")}`
-              : null,
+          message: message,
         });
       } catch (e) {
         console.error(e.message, e);
