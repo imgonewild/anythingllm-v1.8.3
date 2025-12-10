@@ -95,7 +95,7 @@ async function chatPrompt(workspace, user = null) {
 
   // If multimodal embedder is enabled, add image reference instructions
   if (process.env.EMBEDDING_ENGINE === "multimodal") {
-    basePrompt += `\n\nPlease return all related images and rearrange the images according to the response. IMPORTANT: When the context contains images in markdown format like ![Figure from page X](src/extract-images/filename.png "caption"), you MUST include them in your response using the EXACT same markdown syntax. Copy the entire markdown image reference as-is, including the path and caption. For example, if the context shows "![Figure System Architecture from page 3](src/extract-images/doc_page3.png "System Architecture")", include it in your response exactly like that. Do not modify the syntax or convert it to any other format.`;
+    basePrompt += `\n\nYou CAN display images directly using markdown syntax. When the context contains images in markdown format like ![Figure from page X](src/extract-images/filename.png "caption"), include them directly in your response using the EXACT same markdown syntax. Do NOT add disclaimers about not being able to display images - simply show them. Copy the entire markdown image reference as-is, including the path and caption. For example, if the context shows "![Figure System Architecture from page 3](src/extract-images/doc_page3.png "System Architecture")", include it in your response exactly like that. Rearrange images according to your response flow for better readability.`;
   }
 
   return await SystemPromptVariables.expandSystemPromptVariables(
