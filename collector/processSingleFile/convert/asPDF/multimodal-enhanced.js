@@ -70,6 +70,24 @@ async function asPdfMultimodalEnhanced({ fullFilePath = "", filename = "", optio
   console.log(`-- Extracted ${images.length} images --`);
 
   const content = pageContent.join("");
+
+  // Build figure caption to image file mapping
+  const figureCaptionMap = {};
+  images.forEach(img => {
+    const caption = img.caption || '';
+    // Extract figure number (e.g., "Figure 5-1" -> "5-1")
+    const figureMatch = caption.match(/Figure\s+(\d+[-\.]\d+)/i);
+    if (figureMatch) {
+      const figureNumber = figureMatch[1];
+      figureCaptionMap[figureNumber] = {
+        id: img.id,
+        pageNumber: img.pageNumber,
+        fullCaption: caption
+      };
+      console.log(`📌 Mapped Figure ${figureNumber} -> ${img.id} (page ${img.pageNumber})`);
+    }
+  });
+
   const data = {
     id: v4(),
     url: "file://" + fullFilePath,
@@ -87,6 +105,7 @@ async function asPdfMultimodalEnhanced({ fullFilePath = "", filename = "", optio
     images: images,
     isMultimodal: true,
     imageCount: images.length,
+    figureCaptionMap: figureCaptionMap,  // NEW: Figure caption to image mapping
   };
 
   const document = writeToServerDocuments({
@@ -413,7 +432,7 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
 
   if (totalLines === 0) {
     return {
-      caption: `Figure from page ${pageNumber}`,
+      caption: `Figure ${pageNumber}-${imgIndex + 1}`,
       surroundingText: `[IMAGE ${imgIndex + 1}]`,
       sectionTitle: ""
     };
@@ -442,8 +461,11 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
     const contextLines = lines.slice(contextStart, contextEnd);
     const surroundingText = contextLines.join(' ').substring(0, 200);
 
+    // Try to find figure caption even for inline images
+    let caption = findFigureCaptionEnhanced(lines, pageNumber, imgIndex);
+
     return {
-      caption: `Inline image from page ${pageNumber}`,
+      caption: caption || `Figure ${pageNumber}-${imgIndex + 1}`,
       surroundingText: surroundingText || `[INLINE IMAGE ${imgIndex + 1}]`,
       sectionTitle
     };
@@ -460,19 +482,17 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
   const precedingText = precedingLines.join(' ').substring(0, 200);
   const followingText = followingLines.join(' ').substring(0, 200);
 
-  // Look for figure captions
-  const captionPattern = /(?:figure|fig|image|img)[\s\d\.:]+/i;
-  let caption = "";
+  // Look for figure captions with improved pattern matching
+  let caption = findFigureCaptionEnhanced([...precedingLines, ...followingLines], pageNumber, imgIndex);
 
-  for (const line of [...precedingLines, ...followingLines]) {
-    if (captionPattern.test(line)) {
-      caption = line.trim();
-      break;
-    }
+  // If still no caption found, search the entire page text
+  if (!caption) {
+    caption = findFigureCaptionEnhanced(lines, pageNumber, imgIndex);
   }
 
+  // Final fallback: use page-image numbering
   if (!caption) {
-    caption = `Figure from page ${pageNumber}`;
+    caption = `Figure ${pageNumber}-${imgIndex + 1}`;
   }
 
   const surroundingText = `${precedingText} [IMAGE_HERE] ${followingText}`;
@@ -482,6 +502,49 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
     surroundingText,
     sectionTitle
   };
+}
+
+/**
+ * Find figure caption in text lines with improved pattern matching
+ */
+function findFigureCaptionEnhanced(lines, pageNumber, imgIndex) {
+  // Pattern 1: "Figure X-Y: Description" or "Figure X.Y: Description"
+  const fullCaptionPattern = /(?:Figure|Fig|FIG|FIGURE)\s+(\d+[-\.]\d+)\s*[:：]\s*(.+)/i;
+
+  // Pattern 2: Just "Figure X-Y" or "Figure X.Y"
+  const numberOnlyPattern = /(?:Figure|Fig|FIG|FIGURE)\s+(\d+[-\.]\d+)/i;
+
+  // Pattern 3: Standalone figure number at start of line like "2-2:" or "3.4:"
+  const standaloneNumberPattern = /^(\d+[-\.]\d+)\s*[:：]\s*(.+)/;
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+
+    // Try full caption pattern first (e.g., "Figure 2-2: Description")
+    let match = trimmedLine.match(fullCaptionPattern);
+    if (match) {
+      const figNum = match[1];
+      const description = match[2].trim();
+      // Return the figure number and description (without "Figure" prefix)
+      return `Figure ${figNum}: ${description}`;
+    }
+
+    // Try number-only pattern (e.g., "Figure 2-2")
+    match = trimmedLine.match(numberOnlyPattern);
+    if (match) {
+      return `Figure ${match[1]}`;
+    }
+
+    // Try standalone number pattern at line start (e.g., "2-2: Description")
+    match = trimmedLine.match(standaloneNumberPattern);
+    if (match) {
+      const figNum = match[1];
+      const description = match[2].trim();
+      return `Figure ${figNum}: ${description}`;
+    }
+  }
+
+  return null;
 }
 
 module.exports = asPdfMultimodalEnhanced;

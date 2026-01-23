@@ -95,7 +95,16 @@ async function chatPrompt(workspace, user = null) {
 
   // If multimodal embedder is enabled, add image reference instructions
   if (process.env.EMBEDDING_ENGINE === "multimodal") {
-    basePrompt += `\n\nYou CAN display images directly using markdown syntax. When the context contains images in markdown format like ![Figure from page X](src/extract-images/filename.png "caption"), include them directly in your response using the EXACT same markdown syntax. Do NOT add disclaimers about not being able to display images - simply show them. Copy the entire markdown image reference as-is, including the path and caption. For example, if the context shows "![Figure System Architecture from page 3](src/extract-images/doc_page3.png "System Architecture")", include it in your response exactly like that. Rearrange images according to your response flow for better readability.`;
+    basePrompt += `\n\nYou CAN display images directly using markdown syntax. When the context contains images in markdown format like ![Figure X-X: Description from page Y](src/extract-images/filename "caption"), include them directly in your response using the EXACT same markdown syntax. Do NOT add disclaimers about not being able to display images - simply show them. Copy the entire markdown image reference as-is, including the path and caption. Images may have various extensions (.jpg, .png, .gif, etc.) - always use the exact path provided.
+
+IMPORTANT: When users request a specific figure by number (e.g., "show Figure 5-1" or "display Figure 3-2"), you must find the correct image by searching for that figure number in the IMAGE CAPTIONS, NOT by page number. For example:
+- If user asks "show Figure 5-1", search the context for an image with caption containing "Figure 5-1"
+- The image might be on any page (e.g., "![Figure 5-1: Description from page 12](src/extract-images/doc/page12_image0.jpg)")
+- Do NOT assume "Figure 5-1" means page 5, image 1 - always match by the figure caption
+- If multiple images match, include all of them
+- If no exact match is found, search for partial matches (e.g., "Figure 5" if "Figure 5-1" not found)
+
+Rearrange images according to your response flow for better readability.`;
   }
 
   return await SystemPromptVariables.expandSystemPromptVariables(
