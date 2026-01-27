@@ -10,6 +10,7 @@ const PDFLoader = require("./PDFLoader");
 const OCRLoader = require("../../../utils/OCRLoader");
 const fs = require("fs");
 const path = require("path");
+const { detectCaption, isLLMCaptionDetectionAvailable } = require("../../../utils/LLMCaptionDetector");
 
 /**
  * Enhanced PDF processor inspired by RAG Image_Rag/document_processor.py
@@ -27,7 +28,10 @@ async function asPdfMultimodalEnhanced({ fullFilePath = "", filename = "", optio
     splitPages: true,
   });
 
+  // Check LLM availability for caption detection
+  const llmStatus = await isLLMCaptionDetectionAvailable();
   console.log(`-- Working ${filename} (ENHANCED MULTIMODAL MODE) --`);
+  console.log(`🤖 LLM Caption Detection: ${llmStatus.available ? `Available (${llmStatus.provider})` : 'Not available - using fallback patterns'}`);
   const pageContent = [];
   let docs = await pdfLoader.load();
 
@@ -214,7 +218,7 @@ async function extractEmbeddedImagesEnhanced(pdfBuffer, filename, pageContent) {
               console.log(`📸 Image detected: ${imgWidth}x${imgHeight} (${isInlineImage ? 'inline' : 'block'})`);
 
               // Extract context based on image type
-              const context = extractImageContext(pageText, pageNumber, imgIndex, isInlineImage);
+              const context = await extractImageContext(pageText, pageNumber, imgIndex, isInlineImage);
 
               const imageData = {
                 id: `${filename}_page${pageNumber}_embedded_${imgIndex}_${Date.now()}`,
@@ -290,7 +294,7 @@ async function extractWithPdfJsEnhanced(pdfPath, filename, pageContent) {
             console.log(`📸 pdfjs detected ${isInline ? 'inline' : 'block'} image on page ${pageNumber}`);
 
             // Extract context
-            const context = extractImageContext(pageText, pageNumber, imgIndex, isInline);
+            const context = await extractImageContext(pageText, pageNumber, imgIndex, isInline);
 
             const imageData = {
               id: `${filename}_page${pageNumber}_pdfjs_${imgIndex}_${Date.now()}`,
@@ -393,15 +397,15 @@ async function extractWithCanvas(pdfPath, filename, pageContent) {
         const imageBuffer = canvas.toBuffer("image/png");
 
         if (imageBuffer.length > 50000) {
-          const context = extractImageContext(pageText, pageNumber, 0, false);
+          const imgContext = await extractImageContext(pageText, pageNumber, 0, false);
 
           const imageData = {
             id: `${filename}_page${pageNumber}_canvas_${Date.now()}`,
             pageNumber,
             imageBuffer: imageBuffer.toString("base64"),
-            caption: context.caption,
-            surroundingText: context.surroundingText,
-            sectionTitle: context.sectionTitle,
+            caption: imgContext.caption,
+            surroundingText: imgContext.surroundingText,
+            sectionTitle: imgContext.sectionTitle,
             documentName: filename,
             extractionMethod: "canvas-render",
             isInline: false
@@ -423,16 +427,16 @@ async function extractWithCanvas(pdfPath, filename, pageContent) {
 
 /**
  * Extract image context from page text
- * Mimics RAG's context extraction logic
+ * Uses LLM-based caption detection for language-agnostic results
  */
-function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
+async function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
   // Split text into sections
   const lines = pageText.split('\n').filter(l => l.trim());
   const totalLines = lines.length;
 
   if (totalLines === 0) {
     return {
-      caption: `Figure ${pageNumber}-${imgIndex + 1}`,
+      caption: `Image ${pageNumber}-${imgIndex + 1}`,
       surroundingText: `[IMAGE ${imgIndex + 1}]`,
       sectionTitle: ""
     };
@@ -461,11 +465,11 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
     const contextLines = lines.slice(contextStart, contextEnd);
     const surroundingText = contextLines.join(' ').substring(0, 200);
 
-    // Try to find figure caption even for inline images
-    let caption = findFigureCaptionEnhanced(lines, pageNumber, imgIndex);
+    // Try to find figure caption even for inline images (now async)
+    let caption = await findFigureCaptionEnhanced(lines, pageNumber, imgIndex);
 
     return {
-      caption: caption || `Figure ${pageNumber}-${imgIndex + 1}`,
+      caption: caption || `Image ${pageNumber}-${imgIndex + 1}`,
       surroundingText: surroundingText || `[INLINE IMAGE ${imgIndex + 1}]`,
       sectionTitle
     };
@@ -482,17 +486,17 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
   const precedingText = precedingLines.join(' ').substring(0, 200);
   const followingText = followingLines.join(' ').substring(0, 200);
 
-  // Look for figure captions with improved pattern matching
-  let caption = findFigureCaptionEnhanced([...precedingLines, ...followingLines], pageNumber, imgIndex);
+  // Look for figure captions using LLM (language-agnostic)
+  let caption = await findFigureCaptionEnhanced([...precedingLines, ...followingLines], pageNumber, imgIndex);
 
   // If still no caption found, search the entire page text
   if (!caption) {
-    caption = findFigureCaptionEnhanced(lines, pageNumber, imgIndex);
+    caption = await findFigureCaptionEnhanced(lines, pageNumber, imgIndex);
   }
 
-  // Final fallback: use page-image numbering
+  // Final fallback: use page-image numbering (generic label)
   if (!caption) {
-    caption = `Figure ${pageNumber}-${imgIndex + 1}`;
+    caption = `Image ${pageNumber}-${imgIndex + 1}`;
   }
 
   const surroundingText = `${precedingText} [IMAGE_HERE] ${followingText}`;
@@ -505,42 +509,39 @@ function extractImageContext(pageText, pageNumber, imgIndex, isInline) {
 }
 
 /**
- * Find figure caption in text lines with improved pattern matching
+ * Find figure caption in text lines using LLM detection
+ * Falls back to basic pattern matching if LLM is unavailable
  */
-function findFigureCaptionEnhanced(lines, pageNumber, imgIndex) {
-  // Pattern 1: "Figure X-Y: Description" or "Figure X.Y: Description"
-  const fullCaptionPattern = /(?:Figure|Fig|FIG|FIGURE)\s+(\d+[-\.]\d+)\s*[:：]\s*(.+)/i;
+async function findFigureCaptionEnhanced(lines, pageNumber, imgIndex) {
+  // First, try LLM-based detection (language and format agnostic)
+  try {
+    const llmCaption = await detectCaption(lines);
+    if (llmCaption) {
+      console.log(`   🤖 LLM detected caption: ${llmCaption}`);
+      return llmCaption;
+    }
+  } catch (error) {
+    console.warn(`   LLM caption detection error: ${error.message}`);
+  }
 
-  // Pattern 2: Just "Figure X-Y" or "Figure X.Y"
-  const numberOnlyPattern = /(?:Figure|Fig|FIG|FIGURE)\s+(\d+[-\.]\d+)/i;
-
-  // Pattern 3: Standalone figure number at start of line like "2-2:" or "3.4:"
-  const standaloneNumberPattern = /^(\d+[-\.]\d+)\s*[:：]\s*(.+)/;
+  // Fallback: Basic structural pattern matching (no specific keywords)
+  const numberPattern = /^(.{1,30})\s*(\d+[-\.]\d+|\d+)\s*[:：\-–—]\s*(.+)/;
+  const shortNumberPattern = /^(.{1,20})\s*(\d+[-\.]\d+|\d+)\s*$/;
 
   for (const line of lines) {
     const trimmedLine = line.trim();
+    if (!trimmedLine || trimmedLine.length < 3) continue;
 
-    // Try full caption pattern first (e.g., "Figure 2-2: Description")
-    let match = trimmedLine.match(fullCaptionPattern);
-    if (match) {
-      const figNum = match[1];
-      const description = match[2].trim();
-      // Return the figure number and description (without "Figure" prefix)
-      return `Figure ${figNum}: ${description}`;
+    // Try pattern with description
+    let match = trimmedLine.match(numberPattern);
+    if (match && match[1].length <= 30) {
+      return trimmedLine;
     }
 
-    // Try number-only pattern (e.g., "Figure 2-2")
-    match = trimmedLine.match(numberOnlyPattern);
-    if (match) {
-      return `Figure ${match[1]}`;
-    }
-
-    // Try standalone number pattern at line start (e.g., "2-2: Description")
-    match = trimmedLine.match(standaloneNumberPattern);
-    if (match) {
-      const figNum = match[1];
-      const description = match[2].trim();
-      return `Figure ${figNum}: ${description}`;
+    // Try short pattern (label + number only)
+    match = trimmedLine.match(shortNumberPattern);
+    if (match && match[1].length <= 20) {
+      return trimmedLine;
     }
   }
 
